@@ -1,12 +1,12 @@
 ﻿# Dental AI Scribe 一键启动配置
 # 当前路径已按你的电脑填写。以后文件位置改变时，只需修改本文件。
 
-$LlamaServerExe = "C:\Users\14743\Desktop\llama-b9860-bin-win-cuda-13.3-x64\llama-server.exe"
-$ModelFile = "D:\models\Qwen3.5-9B-GGUF\Qwen3.5-9B-Q4_K_M.gguf"
+$LlamaServerExe = "C:\\path\\to\\llama-server.exe"
+$ModelFile = "C:\\path\\to\\Qwen3.5-9B-Q4_K_M.gguf"
 
 # 当前病历系统只需要文字模型，默认不加载 mmproj，可节省内存。
 $UseMmproj = $false
-$MmprojFile = "D:\models\Qwen3.5-9B-GGUF\mmproj-F16.gguf"
+$MmprojFile = "C:\\path\\to\\mmproj-F16.gguf"
 
 $ModelAlias = "dental-qwen"
 $LlamaHost = "127.0.0.1"
