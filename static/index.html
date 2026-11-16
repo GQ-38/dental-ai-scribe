@@ -1,0 +1,2709 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>口腔AI病历助手</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .ai-content { background-color: #e0f2fe; border-left: 4px solid #0284c7; }
+        .ai-suggestion { background-color: #fef3c7; border-left: 4px solid #f59e0b; }
+        .needs-confirm { background-color: #fee2e2; border-left: 4px solid #ef4444; }
+        .manual-edit { background-color: #dcfce7; border-left: 4px solid #22c55e; }
+        .speaker-doctor { color: #0284c7; font-weight: bold; }
+        .speaker-patient { color: #dc2626; font-weight: bold; }
+        .recording-pulse { animation: pulse 1.5s infinite; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.05); }
+        }
+        .wave-bar { animation: wave 1s ease-in-out infinite; }
+        @keyframes wave {
+            0%, 100% { height: 20%; }
+            50% { height: 100%; }
+        }
+        textarea { resize: vertical; min-height: 60px; }
+        .drop-zone-active { border-color: #2563eb !important; background-color: #eff6ff !important; }
+        .case-image-row { display:flex; gap:8px; overflow-x:auto; padding:4px 0; }
+        .case-image-thumb { width:72px; min-width:72px; }
+        .case-image-thumb img { width:72px; height:56px; object-fit:cover; border-radius:8px; border:1px solid #e5e7eb; }
+        .section-image-strip { margin:8px 10px 10px; padding-top:8px; border-top:1px dashed #dbeafe; }
+        .section-image-strip img { width:84px; height:64px; object-fit:cover; border-radius:8px; border:1px solid #bfdbfe; cursor:pointer; }
+        .image-selected-ring { box-shadow:0 0 0 3px #8b5cf6 inset; }
+        .case-image-modal-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+        .case-image-modal-grid img { width:100%; height:130px; object-fit:cover; border-radius:10px; }
+
+        .left-module {
+            margin: 12px 12px 0;
+            padding: 14px;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            background: #ffffff;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        }
+        .left-patient-module { background: linear-gradient(180deg, #f8fbff 0%, #fff 48%); }
+        .left-workflow-module { padding-bottom: 6px; }
+        .left-module-heading {
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:12px;
+            margin-bottom:12px;
+        }
+        .left-module-title {
+            font-size:15px;
+            line-height:1.3;
+            font-weight:700;
+            color:#0f172a;
+        }
+        .left-module-kicker {
+            font-size:9px;
+            letter-spacing:.14em;
+            font-weight:700;
+            color:#94a3b8;
+            margin-bottom:2px;
+        }
+        .left-module-step {
+            min-width:28px;
+            height:28px;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            border-radius:9px;
+            background:#eff6ff;
+            color:#2563eb;
+            font-size:11px;
+            font-weight:700;
+        }
+        .left-subpanel {
+            padding:12px;
+            margin-bottom:10px;
+            border:1px solid #edf2f7;
+            border-radius:12px;
+            background:#fbfdff;
+        }
+        .left-subpanel-heading {
+            display:flex;
+            align-items:center;
+            gap:9px;
+            margin-bottom:10px;
+        }
+        .left-subpanel-heading h3 {
+            font-size:13px;
+            font-weight:700;
+            color:#334155;
+        }
+        .left-subpanel-heading p {
+            font-size:10px;
+            color:#94a3b8;
+            margin-top:1px;
+        }
+        .left-subpanel-index {
+            width:24px;
+            height:24px;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            border-radius:8px;
+            background:#f1f5f9;
+            color:#64748b;
+            font-size:10px;
+            font-weight:700;
+        }
+        .left-conversation-heading {
+            margin:12px 12px 8px;
+            padding:12px 14px 8px;
+            border-top:1px solid #e2e8f0;
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+        }
+        .left-auto-fill-panel {
+            margin:0 12px 12px;
+            padding:14px;
+            border:1px solid #dbeafe;
+            border-radius:14px;
+            background:#f8fbff;
+        }
+        .patient-extra-row {
+            display:flex;
+            align-items:flex-start;
+            gap:6px;
+            font-size:12px;
+            color:#475569;
+        }
+        .patient-extra-label {
+            color:#64748b;
+            white-space:nowrap;
+        }
+        .patient-extra-edit-row {
+            display:grid;
+            grid-template-columns: 112px minmax(0, 1fr) 28px;
+            gap:6px;
+        }
+        .template-section-header > .flex {
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        .section-media-actions {
+            display:flex;
+            align-items:center;
+            gap:5px;
+            margin-left:auto;
+        }
+        .section-media-button {
+            padding:4px 7px;
+            border:1px solid #cbd5e1;
+            border-radius:7px;
+            background:#fff;
+            color:#475569;
+            font-size:10px;
+            line-height:1;
+            white-space:nowrap;
+            transition:.15s ease;
+        }
+        .section-media-button:hover {
+            border-color:#60a5fa;
+            color:#2563eb;
+            background:#eff6ff;
+        }
+        .auto-fill-running { animation: pulse 1.2s ease-in-out infinite; }
+        .auto-fill-switch input:checked + span { background: #2563eb; }
+        .auto-fill-switch input:checked + span::after { transform: translateX(16px); }
+        .auto-fill-switch span::after {
+            content: "";
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            left: 2px;
+            top: 2px;
+            border-radius: 9999px;
+            background: white;
+            transition: transform .2s ease;
+        }
+
+        .clinical-template { font-size: 13px; }
+        .template-section {
+            border: 1px solid #dbe3ec;
+            border-radius: 10px;
+            background: #fff;
+            overflow: hidden;
+        }
+        .template-section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 9px 12px;
+            background: #f8fafc;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .template-section-title {
+            font-weight: 700;
+            color: #1f2937;
+            white-space: nowrap;
+        }
+        .template-textarea {
+            width: 100%;
+            min-height: 66px;
+            padding: 10px 12px;
+            border: 0;
+            outline: none;
+            background: white;
+            line-height: 1.65;
+        }
+        .template-textarea:focus { box-shadow: inset 0 0 0 2px #93c5fd; }
+        .structured-list { padding: 6px 10px 10px; }
+        .structured-row {
+            display: grid;
+            grid-template-columns: 152px minmax(0, 1fr) 28px;
+            gap: 10px;
+            align-items: stretch;
+            padding: 8px 0;
+            border-bottom: 1px dashed #e5e7eb;
+        }
+        .structured-row:last-child { border-bottom: 0; }
+        .tooth-chart {
+            position: relative;
+            width: 144px;
+            height: 76px;
+            margin: auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 0;
+        }
+        .tooth-chart::before {
+            content: "";
+            position: absolute;
+            left: 50%;
+            top: 5px;
+            bottom: 5px;
+            width: 1px;
+            background: #0ea5e9;
+        }
+        .tooth-chart::after {
+            content: "";
+            position: absolute;
+            left: 8px;
+            right: 8px;
+            top: 50%;
+            height: 1px;
+            background: #0ea5e9;
+        }
+        .tooth-quadrant {
+            z-index: 1;
+            width: 100%;
+            min-width: 0;
+            border: 0;
+            outline: none;
+            padding: 3px 8px;
+            text-align: center;
+            background: transparent;
+            font-size: 12px;
+            color: #374151;
+        }
+        .tooth-quadrant:focus { background: #eff6ff; }
+        .tooth-ur { padding-right: 12px; padding-bottom: 5px; }
+        .tooth-ul { padding-left: 12px; padding-bottom: 5px; }
+        .tooth-lr { padding-right: 12px; padding-top: 5px; }
+        .tooth-ll { padding-left: 12px; padding-top: 5px; }
+        .tooth-hint {
+            text-align: center;
+            color: #94a3b8;
+            font-size: 10px;
+            margin-top: 2px;
+        }
+        .structured-content {
+            width: 100%;
+            min-height: 76px;
+            padding: 9px 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 7px;
+            outline: none;
+            line-height: 1.55;
+        }
+        .structured-content:focus {
+            border-color: #60a5fa;
+            box-shadow: 0 0 0 2px #dbeafe;
+        }
+        .remove-row {
+            align-self: center;
+            width: 26px;
+            height: 26px;
+            border-radius: 6px;
+            color: #94a3b8;
+        }
+        .remove-row:hover { color: #dc2626; background: #fee2e2; }
+        .add-row-button {
+            border: 1px dashed #93c5fd;
+            color: #2563eb;
+            border-radius: 7px;
+            padding: 5px 9px;
+            font-size: 12px;
+            background: #eff6ff;
+        }
+        .add-row-button:hover { background: #dbeafe; }
+        .section-badges { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+        .section-badge {
+            border-radius: 9999px;
+            padding: 2px 7px;
+            font-size: 10px;
+            white-space: nowrap;
+        }
+        .visit-ready { color: #15803d !important; }
+        .visit-error { color: #dc2626 !important; }
+        .patient-task-card {
+            border: 1px solid #fde68a;
+            background: #fffbeb;
+            border-radius: 10px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .patient-task-failed {
+            border-color: #fecaca;
+            background: #fef2f2;
+        }
+        @media (max-width: 1200px) {
+            .structured-row { grid-template-columns: 126px minmax(0, 1fr) 26px; }
+            .tooth-chart { width: 120px; }
+        }
+    
+        .image-upload-summary {
+            display:flex;
+            align-items:flex-start;
+            justify-content:space-between;
+            gap:10px;
+            padding:9px 10px;
+            margin-bottom:8px;
+            border:1px solid #dbeafe;
+            border-radius:10px;
+            background:#f8fbff;
+        }
+        .image-upload-gallery {
+            display:grid;
+            grid-template-columns:repeat(3, minmax(0, 1fr));
+            gap:8px;
+        }
+        .image-upload-card {
+            min-width:0;
+            padding:6px;
+            border:1px solid #e2e8f0;
+            border-radius:10px;
+            background:#fff;
+        }
+        .image-upload-card.is-uploading {
+            border-style:dashed;
+            background:#fafafa;
+        }
+        .image-upload-preview {
+            position:relative;
+            width:100%;
+            aspect-ratio:4 / 3;
+            border-radius:8px;
+            overflow:hidden;
+            background:#f1f5f9;
+            cursor:pointer;
+        }
+        .image-upload-preview img {
+            width:100%;
+            height:100%;
+            object-fit:cover;
+        }
+        .image-number-badge {
+            position:absolute;
+            left:5px;
+            top:5px;
+            padding:2px 5px;
+            border-radius:5px;
+            background:rgba(15,23,42,.72);
+            color:#fff;
+            font-size:9px;
+            line-height:1.2;
+        }
+        .image-direct-delete,
+        .section-image-delete {
+            position:absolute;
+            right:4px;
+            top:4px;
+            width:22px;
+            height:22px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            border-radius:999px;
+            border:1px solid rgba(255,255,255,.8);
+            background:rgba(220,38,38,.92);
+            color:#fff;
+            font-size:16px;
+            line-height:1;
+            box-shadow:0 1px 4px rgba(15,23,42,.25);
+            z-index:2;
+        }
+        .image-direct-delete:hover,
+        .section-image-delete:hover {
+            background:#b91c1c;
+        }
+        .image-upload-title {
+            margin-top:5px;
+            color:#334155;
+            font-size:10px;
+            font-weight:600;
+            white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
+        }
+        .image-upload-meta {
+            margin-top:2px;
+            color:#94a3b8;
+            font-size:9px;
+            line-height:1.35;
+        }
+        .image-upload-location {
+            margin-top:4px;
+            padding:3px 5px;
+            border-radius:5px;
+            background:#ecfdf5;
+            color:#047857;
+            font-size:9px;
+            line-height:1.3;
+            white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
+        }
+        .image-upload-location.is-pending {
+            background:#fff7ed;
+            color:#c2410c;
+        }
+        .image-delete-text {
+            width:100%;
+            margin-top:4px;
+            padding:3px 0;
+            color:#dc2626;
+            font-size:9px;
+            text-align:center;
+            border-radius:5px;
+        }
+        .image-delete-text:hover {
+            background:#fef2f2;
+        }
+        .clinical-answer-heading {
+            margin-top:10px;
+            margin-bottom:5px;
+            padding-left:8px;
+            border-left:3px solid #3b82f6;
+            color:#0f172a;
+            font-weight:700;
+            line-height:1.45;
+        }
+        .clinical-answer-heading:first-child {
+            margin-top:0;
+        }
+        .clinical-answer-item {
+            display:flex;
+            align-items:flex-start;
+            gap:7px;
+            margin:5px 0;
+            line-height:1.65;
+        }
+        .clinical-answer-number {
+            width:19px;
+            min-width:19px;
+            height:19px;
+            margin-top:2px;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            border-radius:999px;
+            background:#eff6ff;
+            color:#2563eb;
+            font-size:10px;
+            font-weight:700;
+        }
+        .clinical-answer-paragraph {
+            margin:4px 0;
+            line-height:1.7;
+            color:#334155;
+        }
+        @media (max-width: 1180px) {
+            .image-upload-gallery {
+                grid-template-columns:repeat(2, minmax(0, 1fr));
+            }
+        }
+
+</style>
+</head>
+<body class="bg-gray-50 h-screen flex flex-col overflow-hidden">
+    <!-- 顶部导航 -->
+    <header class="bg-white shadow-sm border-b px-4 py-3 flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-lg">牙</div>
+            <div>
+                <h1 class="text-xl font-bold text-gray-800">口腔AI病历助手</h1>
+                <p class="text-xs text-gray-500">本地部署 · 数据不出诊所</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <button id="global-task-status" onclick="showPatientModal()"
+                class="hidden px-3 py-1 rounded-full text-xs bg-amber-100 text-amber-700 items-center gap-1 hover:bg-amber-200 transition">
+                后台任务 0
+            </button>
+            <div id="llm-status" class="px-3 py-1 rounded-full text-xs bg-green-100 text-green-700 flex items-center gap-1">
+                <span class="w-2 h-2 bg-green-500 rounded-full"></span> LLM就绪
+            </div>
+            <button onclick="showPatientModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm font-medium">
+                + 患者
+            </button>
+        </div>
+    </header>
+
+    <!-- 主体区域 -->
+    <div class="flex-1 flex overflow-hidden">
+        <!-- 左侧：患者与录音区 -->
+        <div class="w-[29%] bg-white border-r flex flex-col">
+            <!-- 患者信息卡 -->
+            <div class="left-module left-patient-module">
+                <div class="left-module-heading">
+                    <div>
+                        <p class="left-module-kicker">PATIENT</p>
+                        <h2 class="left-module-title">患者档案</h2>
+                    </div>
+                    <span class="left-module-step">01</span>
+                </div>
+                <div id="patient-card" class="hidden">
+                    <div class="flex justify-between items-start mb-2 gap-2">
+                        <h3 class="font-bold text-lg min-w-0 truncate" id="p-name">--</h3>
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <button onclick="showEditPatientModal()"
+                                class="text-xs border border-blue-200 text-blue-600 bg-white px-2 py-0.5 rounded hover:bg-blue-50 transition">
+                                编辑
+                            </button>
+                            <button onclick="deleteCurrentPatient()"
+                                class="text-xs border border-red-200 text-red-500 bg-white px-2 py-0.5 rounded hover:bg-red-50 transition">
+                                删除
+                            </button>
+                            <span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded" id="p-type">初诊</span>
+                        </div>
+                    </div>
+                    <div class="text-sm text-gray-600 space-y-1">
+                        <p>性别：<span id="p-gender">--</span> | 年龄：<span id="p-age">--</span></p>
+                        <p>电话：<span id="p-phone">--</span></p>
+                        <p class="text-red-600">过敏史：<span id="p-allergy">--</span></p>
+                        <div id="patient-extra-fields" class="hidden mt-2 pt-2 border-t border-gray-200 space-y-1"></div>
+                        <p class="text-xs text-gray-400" id="visit-status">尚未创建就诊记录</p>
+                        <p class="text-xs text-gray-400 mt-1" id="workspace-task-status">当前患者无后台任务</p>
+                    </div>
+                </div>
+                <div id="no-patient" class="text-center py-8 text-gray-400">
+                    <p>请先选择或新建患者</p>
+                </div>
+            </div>
+
+            <!-- 录音控制区 -->
+            <div class="left-module left-workflow-module">
+                <div class="left-module-heading">
+                    <div>
+                        <p class="left-module-kicker">CONVERSATION</p>
+                        <h2 class="left-module-title">录音与病例资料</h2>
+                    </div>
+                    <span class="left-module-step">02</span>
+                </div>
+
+                <div class="left-subpanel">
+                    <div class="left-subpanel-heading">
+                        <span class="left-subpanel-index">A</span>
+                        <div>
+                            <h3>实时录音</h3>
+                            <p>先选择说话类型，再开始录音</p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 mb-3">
+                    <button id="btn-mixed" onclick="setSpeaker('mixed')" class="py-2 rounded-lg border-2 border-purple-500 bg-purple-50 text-purple-700 font-medium text-xs transition">
+                        整段医患
+                    </button>
+                    <button id="btn-doctor" onclick="setSpeaker('doctor')" class="py-2 rounded-lg border-2 border-gray-200 text-gray-600 font-medium text-xs transition hover:border-blue-300">
+                        医生说
+                    </button>
+                    <button id="btn-patient" onclick="setSpeaker('patient')" class="py-2 rounded-lg border-2 border-gray-200 text-gray-600 font-medium text-xs transition hover:border-red-300">
+                        患者说
+                    </button>
+                </div>
+
+                <button id="record-btn" onclick="toggleRecording()" class="w-full py-4 rounded-xl bg-gray-200 text-gray-500 font-bold text-lg transition flex items-center justify-center gap-2">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
+                    开始录音
+                </button>
+
+                <!-- 波形动画 -->
+                <div id="waveform" class="hidden h-12 flex items-center justify-center gap-1 mt-3">
+                    <div class="w-1.5 bg-red-500 rounded-full wave-bar" style="animation-delay:0s;height:40%"></div>
+                    <div class="w-1.5 bg-red-500 rounded-full wave-bar" style="animation-delay:0.1s;height:70%"></div>
+                    <div class="w-1.5 bg-red-500 rounded-full wave-bar" style="animation-delay:0.2s;height:50%"></div>
+                    <div class="w-1.5 bg-red-500 rounded-full wave-bar" style="animation-delay:0.3s;height:90%"></div>
+                    <div class="w-1.5 bg-red-500 rounded-full wave-bar" style="animation-delay:0.4s;height:60%"></div>
+                    <div class="w-1.5 bg-red-500 rounded-full wave-bar" style="animation-delay:0.5s;height:80%"></div>
+                    <div class="w-1.5 bg-red-500 rounded-full wave-bar" style="animation-delay:0.6s;height:45%"></div>
+                </div>
+
+                <p id="record-status" class="text-center text-xs text-gray-400 mt-2">点击开始录音，系统会自动转写</p>
+                </div>
+
+                <div class="left-subpanel">
+                    <div class="left-subpanel-heading">
+                        <span class="left-subpanel-index">B</span>
+                        <div>
+                            <h3>上传录音</h3>
+                            <p>导入已有录音并在本机转写</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between gap-2 mb-2">
+                        <span class="text-sm font-medium text-gray-700">上传录音文件</span>
+                        <select id="upload-speaker" class="text-xs border rounded-lg px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400">
+                            <option value="mixed">医患混合（未区分）</option>
+                            <option value="doctor">医生录音</option>
+                            <option value="patient">患者录音</option>
+                        </select>
+                    </div>
+
+                    <input id="audio-file-input" type="file"
+                        accept="audio/*,video/mp4,.mp3,.wav,.m4a,.webm,.ogg,.oga,.flac,.aac,.wma,.opus,.mp4,.mpeg,.mpga"
+                        class="hidden" onchange="handleAudioFileSelect(event)">
+
+                    <label id="audio-drop-zone" for="audio-file-input"
+                        ondragover="handleAudioDrag(event, true)"
+                        ondragleave="handleAudioDrag(event, false)"
+                        ondrop="handleAudioDrop(event)"
+                        class="block border-2 border-dashed border-gray-300 rounded-xl p-3 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition">
+                        <svg class="w-7 h-7 mx-auto text-gray-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5.5 5.5 0 0116.9 6.5 4.5 4.5 0 0118 15.865M12 12v9m0-9l-3 3m3-3l3 3"></path>
+                        </svg>
+                        <p class="text-sm font-medium text-gray-700">点击选择或拖入录音文件</p>
+                        <p class="text-xs text-gray-400 mt-1">MP3 / WAV / M4A / WEBM / OGG / FLAC / AAC，最大 500 MB</p>
+                    </label>
+
+                    <p id="upload-file-info" class="hidden text-xs text-gray-600 mt-2 break-all"></p>
+                    <p id="upload-status" class="text-center text-xs text-gray-400 mt-2">上传文件将在本机完成转写</p>
+                </div>
+
+                <div class="left-subpanel">
+                    <div class="left-subpanel-heading">
+                        <span class="left-subpanel-index">C</span>
+                        <div class="flex-1">
+                            <h3>医生描述与病例资料</h3>
+                            <p>描述、文字与图片在这里统一整理</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between gap-2 mb-2">
+                        <div>
+                            <span class="text-xs font-medium text-gray-500">资料类型</span>
+                            <p class="text-[11px] text-gray-400">可描述“图片1、图片2”，并与录音一起智能归档</p>
+                        </div>
+                        <select id="text-import-speaker"
+                            class="text-xs border rounded-lg px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400">
+                            <option value="doctor" selected>医生描述</option>
+                            <option value="mixed">医患转写（未区分）</option>
+                            <option value="patient">患者自述</option>
+                        </select>
+                    </div>
+
+                    <textarea id="transcript-text-input" rows="4"
+                        placeholder="输入医生描述或粘贴转写稿。例如：第一张为26牙口内照，第二张为根尖片……"
+                        class="w-full resize-y border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"></textarea>
+
+                    <input id="case-image-input" type="file" multiple
+                        accept="image/jpeg,image/png,image/webp,image/bmp,.jpg,.jpeg,.png,.webp,.bmp"
+                        class="hidden" onchange="handleCaseImageSelect(event)">
+
+                    <div class="grid grid-cols-3 gap-2 mt-2">
+                        <button id="btn-paste-transcript" onclick="pasteCaseMaterialFromClipboard()"
+                            class="py-2 border border-purple-200 text-purple-700 rounded-lg text-xs font-medium hover:bg-purple-50 transition">
+                            粘贴资料
+                        </button>
+                        <button id="btn-select-case-images" onclick="document.getElementById('case-image-input').click()"
+                            class="py-2 border border-blue-200 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-50 transition">
+                            选择图片
+                        </button>
+                        <button id="btn-import-transcript" onclick="importPastedTranscript()"
+                            class="py-2 bg-purple-600 text-white rounded-lg text-xs font-medium hover:bg-purple-700 transition">
+                            智能归档
+                        </button>
+                    </div>
+
+                    <div id="case-image-staging" class="hidden mt-2"></div>
+                    <p class="text-[11px] text-gray-400 mt-1">
+                        输入框支持直接 Ctrl+V 粘贴截图；图片按显示顺序编号。
+                    </p>
+
+                    <input id="transcript-file-input" type="file"
+                        accept=".txt,.md,.markdown,.csv,.json,.srt,.vtt,.docx,.pdf,.log,text/plain,text/csv,application/json,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        class="hidden" onchange="handleTranscriptFileSelect(event)">
+
+                    <label id="transcript-drop-zone" for="transcript-file-input"
+                        ondragover="handleTranscriptDrag(event, true)"
+                        ondragleave="handleTranscriptDrag(event, false)"
+                        ondrop="handleTranscriptDrop(event)"
+                        class="block mt-2 border-2 border-dashed border-purple-200 rounded-xl p-2.5 text-center cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition">
+                        <p class="text-xs font-medium text-gray-700">更多：导入文字、字幕、Word 或 PDF</p>
+                        <p class="text-[11px] text-gray-400 mt-1">TXT / MD / CSV / JSON / SRT / VTT / DOCX / PDF</p>
+                    </label>
+
+                    <p id="text-import-status" class="text-center text-xs text-gray-400 mt-2">
+                        描述、录音与图片会绑定当前患者，并自动归档到对应病历版块
+                    </p>
+                </div>
+            </div>
+
+            <!-- 对话记录 -->
+            <div class="left-conversation-heading">
+                <div>
+                    <p class="left-module-kicker">TIMELINE</p>
+                    <h2 class="left-module-title">对话与处理记录</h2>
+                </div>
+                <span class="left-module-step">03</span>
+            </div>
+            <div class="flex-1 overflow-y-auto px-4 pb-4" id="conversation-list">
+                <p class="text-center text-gray-400 text-sm py-4">暂无对话记录</p>
+            </div>
+
+            <!-- 自动回填与手动重生成 -->
+            <div class="left-auto-fill-panel">
+                <div class="flex items-center justify-between mb-3">
+                    <div>
+                        <p class="text-sm font-medium text-gray-700">导入或转写后自动回填</p>
+                        <p class="text-xs text-gray-400">结合录音与本地知识库填写模板</p>
+                    </div>
+                    <label class="auto-fill-switch relative inline-flex items-center cursor-pointer">
+                        <input id="auto-fill-toggle" type="checkbox" class="sr-only" checked
+                            onchange="persistAutoFillSetting()">
+                        <span class="relative w-9 h-[18px] rounded-full bg-gray-300 transition"></span>
+                    </label>
+                </div>
+                <p id="auto-fill-status" class="text-xs text-center text-gray-400 mb-2">等待录音、粘贴或文件导入</p>
+                <button onclick="generateRecord({automatic:false})" id="btn-generate" disabled class="w-full py-3 rounded-xl bg-gray-300 text-white font-bold transition flex items-center justify-center gap-2 disabled:cursor-not-allowed">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    手动重新分析并回填
+                </button>
+            </div>
+        </div>
+
+        <!-- 中间：病历审核区 -->
+        <div class="w-[47%] bg-white border-r flex flex-col">
+            <div class="px-4 py-3 border-b bg-gray-50 flex justify-between items-center">
+                <div>
+                    <h2 class="font-bold text-gray-800">门诊病历模板</h2>
+                    <p class="text-xs text-gray-500">可手工填写，也可由 AI 自动回填</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button id="case-image-library-button" onclick="openCaseImageLibrary()"
+                        class="text-xs px-2.5 py-1.5 rounded-lg border border-blue-200 text-blue-700 bg-white hover:bg-blue-50">
+                        病例图片 0
+                    </button>
+                    <div class="flex gap-2 text-xs">
+                        <span class="flex items-center gap-1"><span class="w-3 h-3 bg-blue-100 border-l-2 border-blue-500"></span>AI生成</span>
+                        <span class="flex items-center gap-1"><span class="w-3 h-3 bg-yellow-100 border-l-2 border-yellow-500"></span>AI建议</span>
+                        <span class="flex items-center gap-1"><span class="w-3 h-3 bg-red-100 border-l-2 border-red-500"></span>需确认</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-3 clinical-template" id="record-editor"></div>
+
+            <div class="p-4 border-t bg-gray-50 flex gap-2">
+                <button onclick="saveRecord()" id="btn-save" disabled class="flex-1 py-2 rounded-lg bg-green-600 text-white font-medium hover:bg-green-700 transition disabled:opacity-50">
+                    保存病历
+                </button>
+                <button onclick="exportWord()" id="btn-export" disabled class="flex-1 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition disabled:opacity-50">
+                    导出Word
+                </button>
+            </div>
+        </div>
+
+        <!-- 右侧：信息提取与本地病例问答 -->
+        <div class="w-[24%] bg-gray-50 flex flex-col min-h-0">
+            <div class="px-4 py-3 border-b bg-white shrink-0">
+                <h2 class="font-bold text-gray-800">实时信息提取</h2>
+                <p class="text-xs text-gray-500">AI从录音和病历中提取的关键信息</p>
+            </div>
+
+            <div class="max-h-[34%] overflow-y-auto p-3 space-y-2 shrink-0" id="info-panel">
+                <div class="bg-white rounded-lg p-3 shadow-sm border">
+                    <h4 class="text-xs font-bold text-gray-500 uppercase mb-1">主诉</h4>
+                    <p class="text-sm text-gray-400" id="info-主诉">等待录音...</p>
+                </div>
+                <div class="bg-white rounded-lg p-3 shadow-sm border">
+                    <h4 class="text-xs font-bold text-gray-500 uppercase mb-1">现病史</h4>
+                    <p class="text-sm text-gray-400" id="info-现病史">等待录音...</p>
+                </div>
+                <div class="bg-white rounded-lg p-3 shadow-sm border">
+                    <h4 class="text-xs font-bold text-gray-500 uppercase mb-1">检查所见</h4>
+                    <p class="text-sm text-gray-400" id="info-检查所见">等待录音...</p>
+                </div>
+                <div class="bg-white rounded-lg p-3 shadow-sm border">
+                    <h4 class="text-xs font-bold text-gray-500 uppercase mb-1">诊断线索</h4>
+                    <p class="text-sm text-gray-400" id="info-诊断线索">等待录音...</p>
+                </div>
+            </div>
+
+            <div class="border-t border-b bg-white px-3 py-2 flex items-center justify-between shrink-0">
+                <div>
+                    <h2 class="font-bold text-gray-800 text-sm">本地病例问答</h2>
+                    <p class="text-[11px] text-gray-500">结合患者、录音、病历和知识库连续追问</p>
+                </div>
+                <button onclick="clearCaseChat()"
+                    class="text-xs text-gray-400 hover:text-red-500 transition">
+                    清空
+                </button>
+            </div>
+
+            <div id="case-chat-messages"
+                class="flex-1 min-h-0 overflow-y-auto p-3 space-y-3 bg-gray-50">
+                <div class="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-700">
+                    选择患者后可提问。例如：本次病例还有哪些信息需要确认？
+                    回答来自本地模型，仅供医生审核参考。
+                </div>
+            </div>
+
+            <div class="bg-white border-t p-3 shrink-0">
+                <div class="flex gap-1.5 mb-2 overflow-x-auto">
+                    <button onclick="askQuickCaseQuestion('请总结本次病例的关键信息和需确认项')"
+                        class="whitespace-nowrap text-[11px] px-2 py-1 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100">
+                        病例总结
+                    </button>
+                    <button onclick="askQuickCaseQuestion('根据现有资料，还需要补充哪些问诊或检查？')"
+                        class="whitespace-nowrap text-[11px] px-2 py-1 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100">
+                        补充检查
+                    </button>
+                    <button onclick="askQuickCaseQuestion('请核对当前诊断和治疗计划，指出证据不足或需确认之处')"
+                        class="whitespace-nowrap text-[11px] px-2 py-1 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100">
+                        审核方案
+                    </button>
+                    <button onclick="analyzeSelectedCaseImages()"
+                        class="whitespace-nowrap text-[11px] px-2 py-1 rounded-full bg-purple-50 text-purple-700 hover:bg-purple-100">
+                        图片辅助诊断
+                    </button>
+                </div>
+
+                <div class="relative mb-2">
+                    <button id="chat-image-picker-button" onclick="toggleChatImagePicker()"
+                        class="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
+                        选择病例图片 0
+                    </button>
+                    <div id="chat-selected-images" class="hidden mt-2 flex gap-1.5 overflow-x-auto"></div>
+                    <div id="chat-image-picker" class="hidden absolute bottom-full left-0 right-0 mb-2 bg-white border rounded-xl shadow-xl p-2 z-30 max-h-56 overflow-y-auto"></div>
+                </div>
+
+                <div class="flex gap-2 items-end">
+                    <textarea id="case-chat-input" rows="2"
+                        placeholder="可结合所选图片提问，例如：图中可能是什么表现？"
+                        onkeydown="handleCaseChatKeydown(event)"
+                        class="flex-1 resize-none border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                    <button id="case-chat-send" onclick="sendCaseQuestion()"
+                        class="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50">
+                        发送
+                    </button>
+                </div>
+                <p id="case-chat-status" class="text-[11px] text-gray-400 mt-1">
+                    数据仅发送至本机部署模型
+                </p>
+            </div>
+
+            <details class="border-t bg-white shrink-0">
+                <summary class="cursor-pointer px-3 py-1.5 text-[11px] text-gray-500 hover:bg-gray-50">
+                    运行日志
+                </summary>
+                <div class="h-24 p-3 overflow-y-auto text-xs font-mono border-t" id="log-panel">
+                    <p class="text-gray-400">系统就绪...</p>
+                </div>
+            </details>
+        </div>
+    </div>
+
+    <!-- 患者选择弹窗 -->
+    <div id="patient-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-xl w-[500px] max-h-[80vh] flex flex-col">
+            <div class="p-4 border-b flex justify-between items-center">
+                <h3 class="font-bold text-lg">选择患者</h3>
+                <button onclick="closePatientModal()" class="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <div class="p-4">
+                <input type="text" id="patient-search" placeholder="搜索姓名或电话..." oninput="searchPatients()" 
+                    class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div class="flex-1 overflow-y-auto px-4" id="patient-list">
+                <!-- 患者列表 -->
+            </div>
+            <div class="p-4 border-t bg-gray-50">
+                <button onclick="showNewPatientForm()" class="w-full py-2 border-2 border-dashed border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 transition">
+                    + 新建患者
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新建患者弹窗 -->
+    <div id="new-patient-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-xl w-[400px] p-6">
+            <h3 class="font-bold text-lg mb-4">新建患者</h3>
+            <div class="space-y-3">
+                <input type="text" id="new-name" placeholder="姓名 *" class="w-full px-3 py-2 border rounded-lg">
+                <div class="flex gap-2">
+                    <select id="new-gender" class="px-3 py-2 border rounded-lg">
+                        <option value="">性别</option>
+                        <option value="男">男</option>
+                        <option value="女">女</option>
+                    </select>
+                    <input type="number" id="new-age" placeholder="年龄" class="flex-1 px-3 py-2 border rounded-lg">
+                </div>
+                <input type="text" id="new-phone" placeholder="电话" class="w-full px-3 py-2 border rounded-lg">
+                <input type="text" id="new-allergy" placeholder="过敏史（无则留空）" class="w-full px-3 py-2 border rounded-lg">
+                <div class="pt-2 border-t">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm font-medium text-gray-700">补充信息</span>
+                        <button type="button" onclick="addPatientExtraField('new')"
+                            class="text-xs text-blue-600 hover:text-blue-800">＋新增描述行</button>
+                    </div>
+                    <div id="new-patient-extra-fields" class="space-y-2"></div>
+                </div>
+            </div>
+            <div class="flex gap-2 mt-4">
+                <button onclick="closeNewPatientModal()" class="flex-1 py-2 border rounded-lg hover:bg-gray-50">取消</button>
+                <button onclick="createPatient()" class="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 编辑患者弹窗 -->
+    <div id="edit-patient-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-xl w-[420px] p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-bold text-lg">修改患者信息</h3>
+                <button onclick="closeEditPatientModal()" class="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <div class="space-y-3">
+                <input type="text" id="edit-name" placeholder="姓名 *"
+                    class="w-full px-3 py-2 border rounded-lg">
+                <div class="flex gap-2">
+                    <select id="edit-gender" class="px-3 py-2 border rounded-lg">
+                        <option value="">性别</option>
+                        <option value="男">男</option>
+                        <option value="女">女</option>
+                        <option value="其他">其他</option>
+                    </select>
+                    <input type="number" id="edit-age" min="0" max="150"
+                        placeholder="年龄" class="flex-1 px-3 py-2 border rounded-lg">
+                </div>
+                <input type="text" id="edit-phone" placeholder="电话"
+                    class="w-full px-3 py-2 border rounded-lg">
+                <input type="text" id="edit-allergy" placeholder="过敏史"
+                    class="w-full px-3 py-2 border rounded-lg">
+                <div class="pt-2 border-t">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm font-medium text-gray-700">补充信息</span>
+                        <button type="button" onclick="addPatientExtraField('edit')"
+                            class="text-xs text-blue-600 hover:text-blue-800">＋新增描述行</button>
+                    </div>
+                    <div id="edit-patient-extra-fields" class="space-y-2"></div>
+                </div>
+                <p class="text-xs text-gray-500">
+                    修改后会立即更新当前患者信息，不会删除既有就诊和病历。
+                </p>
+            </div>
+            <div class="flex gap-2 mt-5">
+                <button onclick="closeEditPatientModal()"
+                    class="flex-1 py-2 border rounded-lg hover:bg-gray-50">取消</button>
+                <button id="btn-update-patient" onclick="updatePatient()"
+                    class="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    保存修改
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <input id="section-image-input" type="file" multiple
+        accept="image/jpeg,image/png,image/webp,image/bmp,.jpg,.jpeg,.png,.webp,.bmp"
+        class="hidden" onchange="handleSectionImageSelect(event)">
+
+    <!-- 病例图片管理 -->
+    <div id="case-image-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl w-[880px] max-w-[94vw] max-h-[86vh] flex flex-col">
+            <div class="p-4 border-b flex items-center justify-between">
+                <div>
+                    <h3 class="font-bold text-lg">病例图片</h3>
+                    <p class="text-xs text-gray-500">可查看、修改归档位置和图注</p>
+                </div>
+                <button onclick="closeCaseImageLibrary()" class="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <div id="case-image-library-grid" class="case-image-modal-grid p-4 overflow-y-auto"></div>
+        </div>
+    </div>
+
+    <!-- 图片预览 -->
+    <div id="case-image-lightbox" class="hidden fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-5"
+        onclick="closeCaseImageLightbox()">
+        <div class="max-w-[92vw] max-h-[92vh] text-center" onclick="event.stopPropagation()">
+            <img id="case-image-lightbox-img" class="max-w-full max-h-[78vh] rounded-xl mx-auto bg-white">
+            <p id="case-image-lightbox-caption" class="text-white text-sm mt-3"></p>
+            <button onclick="closeCaseImageLightbox()"
+                class="mt-3 px-4 py-2 rounded-lg bg-white/15 text-white hover:bg-white/25">关闭</button>
+        </div>
+    </div>
+
+    <!-- 生成中遮罩 -->
+    <div id="loading-overlay" class="hidden fixed inset-0 bg-black/30 z-50 flex items-center justify-center">
+        <div class="bg-white rounded-xl p-6 shadow-xl text-center">
+            <div class="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-3"></div>
+            <p class="font-medium" id="loading-text">AI正在结合录音与知识库回填模板...</p>
+            <p class="text-xs text-gray-500 mt-1">完成后会自动填写到对应病历版块</p>
+        </div>
+    </div>
+
+    <script>
+        // ==================== 全局状态 ====================
+        let currentPatient = null;
+        let currentVisit = null;
+        let visitCreationPromise = null;
+        let currentSpeaker = 'mixed';
+        let isRecording = false;
+        let isTranscribing = false;
+        let isImportingText = false;
+        let mediaRecorder = null;
+        let conversation = [];
+        let currentRecord = null;
+        let isGeneratingRecord = false;
+        let pendingAutoGeneration = false;
+        let generationSequence = 0;
+        const manualSections = new Set();
+        const patientCache = new Map();
+        let caseChatHistory = [];
+        let isCaseChatting = false;
+        const API_BASE = '';
+        const CLINICAL_SECTIONS = [
+            '主诉', '现病史', '既往史', '口腔专科检查',
+            '辅助检查', '诊断', '治疗计划', '处置', '医嘱'
+        ];
+        const STRUCTURED_SECTIONS = ['口腔专科检查', '辅助检查', '诊断', '治疗计划'];
+
+        // ==================== 患者管理 ====================
+        function showPatientModal() {
+            document.getElementById('patient-modal').classList.remove('hidden');
+            loadPatients();
+        }
+        function closePatientModal() {
+            document.getElementById('patient-modal').classList.add('hidden');
+        }
+        function showNewPatientForm() {
+            closePatientModal();
+            document.getElementById('new-patient-modal').classList.remove('hidden');
+        }
+        function closeNewPatientModal() {
+            document.getElementById('new-patient-modal').classList.add('hidden');
+        }
+
+        async function loadPatients() {
+            try {
+                const res = await fetch(`${API_BASE}/api/patients`);
+                const data = await res.json();
+                renderPatientList(data.patients);
+            } catch (e) {
+                log('加载患者列表失败: ' + e.message);
+            }
+        }
+
+        function renderPatientList(patients) {
+            const list = document.getElementById('patient-list');
+            patientCache.clear();
+
+            if (patients.length === 0) {
+                list.innerHTML = '<p class="text-center text-gray-400 py-4">暂无患者</p>';
+                return;
+            }
+
+            patients.forEach(patient => patientCache.set(Number(patient.id), patient));
+            list.innerHTML = patients.map(p => `
+                <div onclick="selectPatientFromCache(${Number(p.id)})"
+                    class="p-3 border rounded-lg mb-2 cursor-pointer hover:bg-blue-50 transition">
+                    <div class="flex justify-between gap-3">
+                        <span class="font-bold truncate">${escapeHtml(p.name)}</span>
+                        <span class="text-xs text-gray-500 shrink-0">${escapeHtml(p.phone || '')}</span>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-1">
+                        ${escapeHtml(p.gender || '')}
+                        ${p.age !== null && p.age !== undefined ? escapeHtml(p.age) + '岁' : ''}
+                        | 过敏：${escapeHtml(p.allergy || '否认')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function selectPatientFromCache(patientId) {
+            const patient = patientCache.get(Number(patientId));
+            if (!patient) {
+                alert('患者信息已变化，请重新打开患者列表');
+                return;
+            }
+            selectPatient(
+                patient.id,
+                patient.name,
+                patient.gender,
+                patient.age,
+                patient.phone,
+                patient.allergy
+            );
+        }
+
+        function searchPatients() {
+            const q = document.getElementById('patient-search').value;
+            fetch(`${API_BASE}/api/patients?q=${encodeURIComponent(q)}`)
+                .then(r => r.json()).then(data => renderPatientList(data.patients));
+        }
+
+        async function createPatient() {
+            const body = {
+                name: document.getElementById('new-name').value,
+                gender: document.getElementById('new-gender').value,
+                age: parseInt(document.getElementById('new-age').value) || null,
+                phone: document.getElementById('new-phone').value,
+                allergy: document.getElementById('new-allergy').value || '否认'
+            };
+            if (!body.name) { alert('请输入姓名'); return; }
+
+            try {
+                const res = await fetch(`${API_BASE}/api/patients`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                closeNewPatientModal();
+                selectPatient(data.id, data.name, data.gender, data.age, data.phone, data.allergy);
+                log(`新建患者: ${data.name}`);
+            } catch (e) {
+                alert('创建失败: ' + e.message);
+            }
+        }
+
+        function renderCurrentPatient() {
+            if (!currentPatient) return;
+            document.getElementById('p-name').textContent = currentPatient.name || '--';
+            document.getElementById('p-gender').textContent = currentPatient.gender || '--';
+            document.getElementById('p-age').textContent =
+                currentPatient.age !== null && currentPatient.age !== undefined
+                    ? currentPatient.age
+                    : '--';
+            document.getElementById('p-phone').textContent = currentPatient.phone || '--';
+            document.getElementById('p-allergy').textContent = currentPatient.allergy || '否认';
+        }
+
+        function showEditPatientModal() {
+            if (!currentPatient) {
+                alert('请先选择患者');
+                return;
+            }
+
+            document.getElementById('edit-name').value = currentPatient.name || '';
+            document.getElementById('edit-gender').value = currentPatient.gender || '';
+            document.getElementById('edit-age').value =
+                currentPatient.age !== null && currentPatient.age !== undefined
+                    ? currentPatient.age
+                    : '';
+            document.getElementById('edit-phone').value = currentPatient.phone || '';
+            document.getElementById('edit-allergy').value = currentPatient.allergy || '否认';
+            document.getElementById('edit-patient-modal').classList.remove('hidden');
+        }
+
+        function closeEditPatientModal() {
+            document.getElementById('edit-patient-modal').classList.add('hidden');
+        }
+
+        async function updatePatient() {
+            if (!currentPatient) return;
+
+            const ageRaw = document.getElementById('edit-age').value.trim();
+            const body = {
+                name: document.getElementById('edit-name').value.trim(),
+                gender: document.getElementById('edit-gender').value,
+                age: ageRaw === '' ? null : Number(ageRaw),
+                phone: document.getElementById('edit-phone').value.trim(),
+                allergy: document.getElementById('edit-allergy').value.trim() || '否认'
+            };
+
+            if (!body.name) {
+                alert('请输入患者姓名');
+                return;
+            }
+            if (body.age !== null && (!Number.isInteger(body.age) || body.age < 0 || body.age > 150)) {
+                alert('年龄应为 0 至 150 之间的整数');
+                return;
+            }
+
+            const button = document.getElementById('btn-update-patient');
+            button.disabled = true;
+            button.textContent = '保存中...';
+
+            try {
+                const res = await fetch(`${API_BASE}/api/patients/${currentPatient.id}`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(body)
+                });
+
+                let data = {};
+                try {
+                    data = await res.json();
+                } catch (_) {}
+
+                if (!res.ok) {
+                    throw new Error(data.detail || `保存失败（HTTP ${res.status}）`);
+                }
+
+                currentPatient = data;
+                patientCache.set(Number(data.id), data);
+                renderCurrentPatient();
+                closeEditPatientModal();
+                log(`已修改患者信息：${data.name}`);
+                appendCaseSystemMessage('患者基本信息已更新，后续问答将使用最新资料。');
+            } catch (e) {
+                alert('修改患者信息失败：' + e.message);
+                log('修改患者信息失败：' + e.message);
+            } finally {
+                button.disabled = false;
+                button.textContent = '保存修改';
+            }
+        }
+
+        function emptyRecord() {
+            const result = {};
+            CLINICAL_SECTIONS.forEach(name => {
+                result[name] = {
+                    content: '',
+                    source: 'manual',
+                    needs_confirm: false
+                };
+            });
+            return result;
+        }
+
+        function resetVisitWorkspace() {
+            currentVisit = null;
+            visitCreationPromise = null;
+            conversation = [];
+            currentRecord = emptyRecord();
+            manualSections.clear();
+            clearCaseChat(false);
+            renderConversationList();
+            renderRecordEditor(currentRecord);
+            updateGenerateButton();
+            document.getElementById('btn-save').disabled = true;
+            document.getElementById('btn-export').disabled = true;
+            const autoStatus = document.getElementById('auto-fill-status');
+            if (autoStatus) {
+                autoStatus.textContent = '等待录音、粘贴或文件导入';
+                autoStatus.className = 'text-xs text-center text-gray-400 mb-2';
+            }
+            updateRecordingAvailability();
+        }
+
+        function setVisitStatus(text, state = 'pending') {
+            const el = document.getElementById('visit-status');
+            if (!el) return;
+            el.textContent = text;
+            el.className = 'text-xs text-gray-400';
+            if (state === 'ready') el.classList.add('visit-ready');
+            if (state === 'error') el.classList.add('visit-error');
+        }
+
+        async function createVisitForPatient(patientId) {
+            const params = new URLSearchParams({
+                patient_id: String(patientId),
+                visit_type: '初诊'
+            });
+
+            const res = await fetch(`${API_BASE}/api/visits?${params.toString()}`, {
+                method: 'POST'
+            });
+
+            let data = {};
+            try {
+                data = await res.json();
+            } catch (_) {
+                // 由下方统一提示
+            }
+
+            if (!res.ok || !data.visit_id) {
+                const message = data.detail || data.error || `创建失败（HTTP ${res.status}）`;
+                throw new Error(message);
+            }
+
+            return data.visit_id;
+        }
+
+        async function ensureVisit() {
+            if (currentVisit) return currentVisit;
+            if (!currentPatient) {
+                alert('请先选择患者');
+                return null;
+            }
+
+            if (visitCreationPromise) {
+                return await visitCreationPromise;
+            }
+
+            const patientId = currentPatient.id;
+            setVisitStatus('正在创建就诊记录...');
+            updateRecordingAvailability();
+
+            visitCreationPromise = (async () => {
+                try {
+                    const visitId = await createVisitForPatient(patientId);
+
+                    if (!currentPatient || currentPatient.id !== patientId) {
+                        return null;
+                    }
+
+                    currentVisit = visitId;
+                    setVisitStatus(`就诊记录 #${currentVisit} 已创建`, 'ready');
+                    document.getElementById('btn-save').disabled = false;
+                    updateGenerateButton();
+                    updateRecordingAvailability();
+                    log(`开始初诊记录 #${currentVisit}`);
+                    return currentVisit;
+                } catch (e) {
+                    currentVisit = null;
+                    setVisitStatus('就诊记录创建失败：' + e.message, 'error');
+                    updateRecordingAvailability();
+                    log('创建就诊记录失败：' + e.message);
+                    alert('无法创建就诊记录：' + e.message);
+                    return null;
+                } finally {
+                    visitCreationPromise = null;
+                }
+            })();
+
+            return await visitCreationPromise;
+        }
+
+        function updateRecordingAvailability() {
+            const btn = document.getElementById('record-btn');
+            if (!btn) return;
+
+            const ready = Boolean(currentPatient) && !isTranscribing && !isGeneratingRecord && !isImportingText;
+            btn.disabled = !ready;
+            btn.classList.toggle('opacity-60', !ready);
+            btn.classList.toggle('cursor-not-allowed', !ready);
+        }
+
+        async function selectPatient(id, name, gender, age, phone, allergy) {
+            currentPatient = {id, name, gender, age, phone, allergy};
+            renderCurrentPatient();
+            document.getElementById('patient-card').classList.remove('hidden');
+            document.getElementById('no-patient').classList.add('hidden');
+            closePatientModal();
+
+            resetVisitWorkspace();
+            setVisitStatus('正在创建就诊记录...');
+            await ensureVisit();
+        }
+
+        // ==================== 录音与文件上传 ====================
+        const MAX_AUDIO_FILE_SIZE = 500 * 1024 * 1024;
+        const SUPPORTED_AUDIO_EXTENSIONS = [
+            '.webm', '.wav', '.mp3', '.m4a', '.mp4', '.ogg', '.oga',
+            '.flac', '.aac', '.wma', '.opus', '.mpeg', '.mpga'
+        ];
+        const MAX_TRANSCRIPT_FILE_SIZE = 20 * 1024 * 1024;
+        const MAX_IMPORTED_TEXT_CHARS = 21600;
+        const SUPPORTED_TRANSCRIPT_EXTENSIONS = [
+            '.txt', '.md', '.markdown', '.csv', '.json',
+            '.srt', '.vtt', '.docx', '.pdf', '.log'
+        ];
+
+        function setSpeaker(speaker) {
+            currentSpeaker = speaker;
+            const states = {
+                mixed: {
+                    selected: 'py-2 rounded-lg border-2 border-purple-500 bg-purple-50 text-purple-700 font-medium text-xs transition',
+                    normal: 'py-2 rounded-lg border-2 border-gray-200 text-gray-600 font-medium text-xs transition hover:border-purple-300'
+                },
+                doctor: {
+                    selected: 'py-2 rounded-lg border-2 border-blue-500 bg-blue-50 text-blue-700 font-medium text-xs transition',
+                    normal: 'py-2 rounded-lg border-2 border-gray-200 text-gray-600 font-medium text-xs transition hover:border-blue-300'
+                },
+                patient: {
+                    selected: 'py-2 rounded-lg border-2 border-red-500 bg-red-50 text-red-700 font-medium text-xs transition',
+                    normal: 'py-2 rounded-lg border-2 border-gray-200 text-gray-600 font-medium text-xs transition hover:border-red-300'
+                }
+            };
+
+            ['mixed', 'doctor', 'patient'].forEach(name => {
+                const button = document.getElementById(`btn-${name}`);
+                if (button) button.className = name === speaker
+                    ? states[name].selected
+                    : states[name].normal;
+            });
+        }
+
+        function speakerLabel(speaker) {
+            if (speaker === 'doctor') return '医生';
+            if (speaker === 'patient') return '患者';
+            return '医患混合（说话人未区分）';
+        }
+
+        async function toggleRecording() {
+            if (!currentPatient) { alert('请先选择患者'); return; }
+            if (isTranscribing) { alert('当前正在转写录音，请稍候'); return; }
+
+            const visitId = await ensureVisit();
+            if (!visitId) return;
+
+            if (isRecording) {
+                stopRecording();
+            } else {
+                startRecording();
+            }
+        }
+
+        async function startRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const recorderOptions = MediaRecorder.isTypeSupported('audio/webm')
+                    ? { mimeType: 'audio/webm' }
+                    : undefined;
+                mediaRecorder = recorderOptions
+                    ? new MediaRecorder(stream, recorderOptions)
+                    : new MediaRecorder(stream);
+
+                const chunks = [];
+                const recordingSpeaker = currentSpeaker;
+
+                mediaRecorder.ondataavailable = event => {
+                    if (event.data && event.data.size > 0) chunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    const mimeType = mediaRecorder.mimeType || 'audio/webm';
+                    const blob = new Blob(chunks, { type: mimeType });
+                    const filename = mimeType.includes('webm') ? 'recording.webm' : 'recording.wav';
+                    try {
+                        await uploadAudio(blob, filename, recordingSpeaker, 'live');
+                    } catch (_) {
+                        // uploadAudio 已更新界面状态和日志
+                    } finally {
+                        stream.getTracks().forEach(track => track.stop());
+                    }
+                };
+
+                mediaRecorder.start();
+                isRecording = true;
+
+                const btn = document.getElementById('record-btn');
+                btn.className = 'w-full py-4 rounded-xl bg-red-600 text-white font-bold transition recording-pulse flex items-center justify-center gap-2';
+                btn.innerHTML = '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"></path></svg> 停止录音';
+                document.getElementById('waveform').classList.remove('hidden');
+                document.getElementById('record-status').textContent = `正在录音（${speakerLabel(recordingSpeaker)}）... 点击停止后自动转写`;
+
+                log(`开始录音：${speakerLabel(recordingSpeaker)}`);
+            } catch (e) {
+                alert('无法访问麦克风: ' + e.message);
+            }
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            isRecording = false;
+
+            const btn = document.getElementById('record-btn');
+            btn.className = 'w-full py-4 rounded-xl bg-gray-200 text-gray-500 font-bold transition flex items-center justify-center gap-2';
+            btn.innerHTML = '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg> 开始录音';
+            document.getElementById('waveform').classList.add('hidden');
+            document.getElementById('record-status').textContent = '转写中...';
+
+            log('停止录音，转写中...');
+        }
+
+        function handleAudioDrag(event, active) {
+            event.preventDefault();
+            event.stopPropagation();
+            const zone = document.getElementById('audio-drop-zone');
+            if (!isTranscribing && active) {
+                zone.classList.add('drop-zone-active');
+            } else {
+                zone.classList.remove('drop-zone-active');
+            }
+        }
+
+        async function handleAudioDrop(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            handleAudioDrag(event, false);
+            const file = event.dataTransfer?.files?.[0];
+            if (file) await processAudioFile(file);
+        }
+
+        async function handleAudioFileSelect(event) {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (file) await processAudioFile(file);
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return `${bytes} B`;
+            if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+            return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+        }
+
+        function validateAudioFile(file) {
+            const suffixIndex = file.name.lastIndexOf('.');
+            const suffix = suffixIndex >= 0 ? file.name.slice(suffixIndex).toLowerCase() : '';
+            const mimeAllowed = file.type.startsWith('audio/') || file.type === 'video/mp4';
+
+            if (!SUPPORTED_AUDIO_EXTENSIONS.includes(suffix) && !mimeAllowed) {
+                throw new Error('不支持的录音格式，请上传 MP3、WAV、M4A、WEBM、OGG、FLAC、AAC、WMA、OPUS 或 MP4 文件');
+            }
+            if (file.size === 0) {
+                throw new Error('录音文件为空');
+            }
+            if (file.size > MAX_AUDIO_FILE_SIZE) {
+                throw new Error('录音文件不能超过 500 MB');
+            }
+        }
+
+        async function processAudioFile(file) {
+            if (!currentPatient) { alert('请先选择患者'); return; }
+            const visitId = await ensureVisit();
+            if (!visitId) return;
+            if (isRecording) { alert('请先停止实时录音'); return; }
+            if (isTranscribing) { alert('已有录音正在转写，请稍候'); return; }
+
+            try {
+                validateAudioFile(file);
+                const speaker = document.getElementById('upload-speaker').value;
+                const fileInfo = document.getElementById('upload-file-info');
+                fileInfo.textContent = `${file.name} · ${formatFileSize(file.size)} · ${speakerLabel(speaker)}`;
+                fileInfo.classList.remove('hidden');
+
+                document.getElementById('upload-status').textContent = '正在上传并转写，较长录音可能需要数分钟...';
+                log(`上传录音：${file.name}（${formatFileSize(file.size)}）`);
+                await uploadAudio(file, file.name, speaker, 'file');
+            } catch (e) {
+                document.getElementById('upload-status').textContent = e.message;
+                log('录音文件处理失败: ' + e.message);
+                alert(e.message);
+            }
+        }
+
+        // ==================== 录音文字与文档导入 ====================
+        function limitTranscriptText(text) {
+            const clean = String(text || '')
+                .replaceAll('\r\n', '\n')
+                .replaceAll('\r', '\n')
+                .trim();
+
+            if (clean.length <= MAX_IMPORTED_TEXT_CHARS) {
+                return {text: clean, truncated: false, originalChars: clean.length};
+            }
+
+            const headChars = Math.floor(MAX_IMPORTED_TEXT_CHARS * 0.72);
+            const tailChars = MAX_IMPORTED_TEXT_CHARS - headChars;
+            return {
+                text: clean.slice(0, headChars)
+                    + '\n\n【中间内容因本地模型上下文限制已省略】\n\n'
+                    + clean.slice(-tailChars),
+                truncated: true,
+                originalChars: clean.length
+            };
+        }
+
+        function setTextImportState(active) {
+            isImportingText = active;
+            const input = document.getElementById('transcript-text-input');
+            const fileInput = document.getElementById('transcript-file-input');
+            const speaker = document.getElementById('text-import-speaker');
+            const pasteButton = document.getElementById('btn-paste-transcript');
+            const importButton = document.getElementById('btn-import-transcript');
+            const dropZone = document.getElementById('transcript-drop-zone');
+
+            const disabled = active || isGeneratingRecord || isTranscribing;
+            input.disabled = disabled;
+            fileInput.disabled = disabled;
+            speaker.disabled = disabled;
+            pasteButton.disabled = disabled;
+            importButton.disabled = disabled;
+            dropZone.classList.toggle('opacity-60', disabled);
+            dropZone.classList.toggle('cursor-not-allowed', disabled);
+            updateRecordingAvailability();
+        }
+
+        async function pasteTranscriptFromClipboard() {
+            if (isImportingText || isGeneratingRecord || isTranscribing) return;
+
+            const input = document.getElementById('transcript-text-input');
+            const status = document.getElementById('text-import-status');
+
+            try {
+                const clipboardText = await navigator.clipboard.readText();
+                if (!clipboardText.trim()) {
+                    throw new Error('剪贴板中没有文字');
+                }
+                input.value = clipboardText;
+                status.textContent = `已从剪贴板粘贴 ${clipboardText.trim().length} 字，请点击“导入文字并回填”`;
+                input.focus();
+            } catch (e) {
+                input.focus();
+                status.textContent = '浏览器未允许读取剪贴板，请在输入框按 Ctrl+V 粘贴';
+            }
+        }
+
+        async function importPastedTranscript() {
+            if (!currentPatient) {
+                alert('请先选择患者');
+                return;
+            }
+
+            const visitId = await ensureVisit();
+            if (!visitId) return;
+
+            const input = document.getElementById('transcript-text-input');
+            const limited = limitTranscriptText(input.value);
+
+            if (!limited.text) {
+                alert('请先粘贴录音文字');
+                input.focus();
+                return;
+            }
+
+            const speaker = document.getElementById('text-import-speaker').value;
+            setTextImportState(true);
+
+            try {
+                await finishTranscriptImport(limited.text, speaker, {
+                    source: 'text_paste',
+                    filename: '剪贴板文字',
+                    format: '粘贴',
+                    chars: limited.text.length,
+                    originalChars: limited.originalChars,
+                    truncated: limited.truncated
+                });
+                input.value = '';
+            } finally {
+                setTextImportState(false);
+            }
+        }
+
+        function handleTranscriptDrag(event, active) {
+            event.preventDefault();
+            event.stopPropagation();
+            const zone = document.getElementById('transcript-drop-zone');
+
+            if (!isImportingText && !isGeneratingRecord && !isTranscribing && active) {
+                zone.classList.add('drop-zone-active');
+            } else {
+                zone.classList.remove('drop-zone-active');
+            }
+        }
+
+        async function handleTranscriptDrop(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            handleTranscriptDrag(event, false);
+            const file = event.dataTransfer?.files?.[0];
+            if (file) await processTranscriptFile(file);
+        }
+
+        async function handleTranscriptFileSelect(event) {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (file) await processTranscriptFile(file);
+        }
+
+        function validateTranscriptFile(file) {
+            const suffixIndex = file.name.lastIndexOf('.');
+            const suffix = suffixIndex >= 0
+                ? file.name.slice(suffixIndex).toLowerCase()
+                : '';
+
+            if (!SUPPORTED_TRANSCRIPT_EXTENSIONS.includes(suffix)) {
+                throw new Error('不支持该格式，请上传 TXT、MD、CSV、JSON、SRT、VTT、DOCX 或 PDF 文件');
+            }
+            if (file.size === 0) {
+                throw new Error('文字文件为空');
+            }
+            if (file.size > MAX_TRANSCRIPT_FILE_SIZE) {
+                throw new Error('文字文件不能超过 20 MB');
+            }
+        }
+
+        async function processTranscriptFile(file) {
+            if (!currentPatient) {
+                alert('请先选择患者');
+                return;
+            }
+
+            const visitId = await ensureVisit();
+            if (!visitId) return;
+            if (isRecording) {
+                alert('请先停止实时录音');
+                return;
+            }
+            if (isImportingText || isTranscribing || isGeneratingRecord) {
+                alert('当前正在处理其他内容，请稍候');
+                return;
+            }
+
+            const status = document.getElementById('text-import-status');
+            setTextImportState(true);
+
+            try {
+                validateTranscriptFile(file);
+                status.textContent = `正在本机读取 ${file.name}...`;
+                log(`导入录音文字文件：${file.name}（${formatFileSize(file.size)}）`);
+
+                const formData = new FormData();
+                formData.append('document', file, file.name);
+
+                const res = await fetch(`${API_BASE}/api/import-text`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                let data = {};
+                try {
+                    data = await res.json();
+                } catch (_) {}
+
+                if (!res.ok || !data.text) {
+                    throw new Error(data.detail || `文件解析失败（HTTP ${res.status}）`);
+                }
+
+                const speaker = document.getElementById('text-import-speaker').value;
+                await finishTranscriptImport(data.text, speaker, {
+                    source: 'text_file',
+                    filename: data.filename || file.name,
+                    format: data.format || '',
+                    chars: data.chars || data.text.length,
+                    originalChars: data.original_chars || data.text.length,
+                    truncated: Boolean(data.truncated)
+                });
+            } catch (e) {
+                status.textContent = '导入失败：' + e.message;
+                log('录音文字文件导入失败：' + e.message);
+                alert(e.message);
+            } finally {
+                setTextImportState(false);
+            }
+        }
+
+        async function finishTranscriptImport(text, speaker, metadata) {
+            const status = document.getElementById('text-import-status');
+
+            addConversation(speaker, text, metadata);
+
+            const truncateText = metadata.truncated
+                ? `；原文 ${metadata.originalChars} 字，已按上下文限制保留首尾`
+                : '';
+            status.textContent = `已导入 ${metadata.chars || text.length} 字${truncateText}`;
+            log(`录音文字已加入对话：${metadata.filename || metadata.format || '粘贴文字'}`);
+
+            if (isAutoFillEnabled()) {
+                document.getElementById('auto-fill-status').textContent =
+                    '文字导入完成，正在自动分析并回填...';
+                await generateRecord({automatic: true});
+            } else {
+                document.getElementById('auto-fill-status').textContent =
+                    '文字已导入，可点击手动重新分析并回填';
+            }
+        }
+
+        function setTranscribingState(active) {
+            isTranscribing = active;
+            const fileInput = document.getElementById('audio-file-input');
+            const dropZone = document.getElementById('audio-drop-zone');
+            const uploadSpeaker = document.getElementById('upload-speaker');
+
+            fileInput.disabled = active || isGeneratingRecord;
+            uploadSpeaker.disabled = active || isGeneratingRecord;
+            dropZone.classList.toggle('opacity-60', active || isGeneratingRecord);
+            dropZone.classList.toggle('cursor-not-allowed', active || isGeneratingRecord);
+            setTextImportState(isImportingText);
+            updateRecordingAvailability();
+        }
+
+        async function uploadAudio(audioData, filename, speaker, source) {
+            if (isTranscribing) return;
+            setTranscribingState(true);
+
+            const formData = new FormData();
+            formData.append('audio', audioData, filename);
+
+            try {
+                const res = await fetch(`${API_BASE}/api/transcribe`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                let data = {};
+                try {
+                    data = await res.json();
+                } catch (_) {
+                    // 由下面的HTTP状态错误统一处理
+                }
+
+                if (!res.ok) {
+                    throw new Error(data.detail || `服务器返回 ${res.status}`);
+                }
+                if (!data.text) {
+                    throw new Error('未识别到清晰语音，请检查录音内容或音量');
+                }
+
+                addConversation(speaker, data.text, {
+                    source,
+                    filename: data.filename || filename,
+                    duration: String(data.duration || '')
+                });
+
+                const durationText = data.duration ? `，时长 ${data.duration} 秒` : '';
+                if (source === 'file') {
+                    document.getElementById('upload-status').textContent = `转写完成${durationText}，已加入对话记录`;
+                } else {
+                    document.getElementById('record-status').textContent = `转写完成${durationText}，可继续录音`;
+                }
+                log(`转写完成：${data.filename || filename}${durationText}`);
+
+                if (isAutoFillEnabled()) {
+                    document.getElementById('auto-fill-status').textContent = '转写完成，正在自动分析并回填...';
+                    await generateRecord({automatic: true});
+                } else {
+                    document.getElementById('auto-fill-status').textContent = '已完成转写，可点击手动重新分析并回填';
+                }
+            } catch (e) {
+                if (source === 'file') {
+                    document.getElementById('upload-status').textContent = '转写失败：' + e.message;
+                } else {
+                    document.getElementById('record-status').textContent = '转写失败，请重试';
+                }
+                log('转写失败: ' + e.message);
+                throw e;
+            } finally {
+                setTranscribingState(false);
+            }
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
+        }
+
+        function addConversation(speaker, text, metadata = {}) {
+            const entry = {
+                id: `conv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                speaker,
+                text,
+                time: new Date().toISOString(),
+                source: metadata.source || 'live',
+                filename: metadata.filename || '',
+                duration: metadata.duration || '',
+                format: metadata.format || '',
+                chars: metadata.chars || text.length,
+                originalChars: metadata.originalChars || text.length,
+                truncated: Boolean(metadata.truncated)
+            };
+            conversation.push(entry);
+            renderConversationList();
+            updateGenerateButton();
+            updateInfoPanel(speaker, text);
+        }
+
+        function removeConversation(id) {
+            conversation = conversation.filter(item => item.id !== id);
+            renderConversationList();
+            updateGenerateButton();
+            log('已删除一条对话记录');
+        }
+
+        function renderConversationList() {
+            const list = document.getElementById('conversation-list');
+            if (conversation.length === 0) {
+                list.innerHTML = '<p class="text-center text-gray-400 text-sm py-4">暂无对话记录</p>';
+                return;
+            }
+
+            list.innerHTML = conversation.map(item => {
+                const isDoctor = item.speaker === 'doctor';
+                const isPatient = item.speaker === 'patient';
+                const cardClass = isDoctor
+                    ? 'bg-blue-50 ml-4'
+                    : (isPatient ? 'bg-gray-50 mr-4' : 'bg-purple-50');
+                const labelClass = isDoctor
+                    ? 'speaker-doctor'
+                    : (isPatient ? 'speaker-patient' : 'text-purple-700 font-bold');
+                let fileMeta = '';
+                if (item.source === 'file') {
+                    fileMeta = `<p class="text-xs text-gray-400 mt-1">录音：${escapeHtml(item.filename)}${item.duration ? ` · ${escapeHtml(item.duration)} 秒` : ''}</p>`;
+                } else if (item.source === 'text_file') {
+                    fileMeta = `<p class="text-xs text-gray-400 mt-1">文字文件：${escapeHtml(item.filename)}${item.format ? ` · ${escapeHtml(item.format)}` : ''} · ${escapeHtml(item.chars)} 字${item.truncated ? ' · 已保留首尾' : ''}</p>`;
+                } else if (item.source === 'text_paste') {
+                    fileMeta = `<p class="text-xs text-gray-400 mt-1">剪贴板文字 · ${escapeHtml(item.chars)} 字${item.truncated ? ' · 已保留首尾' : ''}</p>`;
+                }
+
+                return `
+                    <div class="mb-3 p-3 rounded-lg ${cardClass}">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-xs ${labelClass}">${escapeHtml(speakerLabel(item.speaker))}</span>
+                            <button onclick="removeConversation('${item.id}')" class="text-xs text-gray-400 hover:text-red-500">删除</button>
+                        </div>
+                        <p class="text-sm text-gray-800 whitespace-pre-wrap">${escapeHtml(item.text)}</p>
+                        ${fileMeta}
+                    </div>
+                `;
+            }).join('');
+
+            list.scrollTop = list.scrollHeight;
+        }
+
+        function updateGenerateButton() {
+            const btn = document.getElementById('btn-generate');
+            const enabled = Boolean(currentVisit && conversation.length > 0 && !isGeneratingRecord);
+            btn.disabled = !enabled;
+            btn.className = enabled
+                ? 'w-full py-3 rounded-xl bg-blue-600 text-white font-bold transition hover:bg-blue-700 flex items-center justify-center gap-2'
+                : 'w-full py-3 rounded-xl bg-gray-300 text-white font-bold transition flex items-center justify-center gap-2 disabled:cursor-not-allowed';
+            updateRecordingAvailability();
+        }
+
+        function updateInfoPanel(speaker, text) {
+            // 简单关键词匹配展示，实际应由后端提取
+            if (speaker === 'patient' && text.includes('疼')) {
+                document.getElementById('info-主诉').textContent = text;
+                document.getElementById('info-主诉').className = 'text-sm text-gray-800';
+            }
+        }
+
+        // ==================== 病历生成 ====================
+        function isAutoFillEnabled() {
+            return Boolean(document.getElementById('auto-fill-toggle')?.checked);
+        }
+
+        function persistAutoFillSetting() {
+            localStorage.setItem('dental-auto-fill', isAutoFillEnabled() ? '1' : '0');
+            const status = document.getElementById('auto-fill-status');
+            status.textContent = isAutoFillEnabled()
+                ? '自动回填已开启'
+                : '自动回填已关闭，可使用下方手动按钮';
+            status.className = 'text-xs text-center text-gray-500 mb-2';
+        }
+
+        function restoreAutoFillSetting() {
+            const saved = localStorage.getItem('dental-auto-fill');
+            const toggle = document.getElementById('auto-fill-toggle');
+            if (toggle && saved !== null) toggle.checked = saved !== '0';
+        }
+
+        function captureManualSectionValues() {
+            const values = {};
+            if (!currentRecord || manualSections.size === 0) return values;
+
+            const visibleValues = collectTemplateSections();
+            manualSections.forEach(section => {
+                values[section] = visibleValues[section];
+            });
+            return values;
+        }
+
+        function mergeManualSections(generated, preservedManual) {
+            const merged = {...generated};
+            Object.entries(preservedManual || {}).forEach(([section, data]) => {
+                merged[section] = {
+                    ...data,
+                    source: 'manual',
+                    needs_confirm: false
+                };
+            });
+            return merged;
+        }
+
+        function setGenerationState(active, automatic = false) {
+            isGeneratingRecord = active;
+            const status = document.getElementById('auto-fill-status');
+            const button = document.getElementById('btn-generate');
+            const fileInput = document.getElementById('audio-file-input');
+            const uploadSpeaker = document.getElementById('upload-speaker');
+            const dropZone = document.getElementById('audio-drop-zone');
+
+            if (button) button.disabled = active || conversation.length === 0 || !currentVisit;
+            if (fileInput) fileInput.disabled = active || isTranscribing;
+            if (uploadSpeaker) uploadSpeaker.disabled = active || isTranscribing;
+            if (dropZone) {
+                dropZone.classList.toggle('opacity-60', active || isTranscribing);
+                dropZone.classList.toggle('cursor-not-allowed', active || isTranscribing);
+            }
+            setTextImportState(isImportingText);
+
+            if (status) {
+                status.classList.toggle('auto-fill-running', active);
+                if (active) {
+                    status.textContent = automatic
+                        ? 'AI正在读取完整录音并结合知识库自动回填...'
+                        : 'AI正在重新分析并回填...';
+                    status.className = 'text-xs text-center text-blue-600 mb-2 auto-fill-running';
+                }
+            }
+
+            updateRecordingAvailability();
+        }
+
+        // ==================== 病历生成与自动回填 ====================
+        async function generateRecord(options = {}) {
+            const automatic = Boolean(options.automatic);
+
+            if (conversation.length === 0) {
+                if (!automatic) alert('请先完成录音、粘贴文字或上传录音/文字文件');
+                return;
+            }
+
+            if (isGeneratingRecord) {
+                if (automatic) {
+                    pendingAutoGeneration = true;
+                    log('已有回填任务运行，新的录音将在当前任务完成后再次分析');
+                }
+                return;
+            }
+
+            const visitId = await ensureVisit();
+            if (!visitId) return;
+
+            const requestSequence = ++generationSequence;
+            const preservedManual = captureManualSectionValues();
+
+            setGenerationState(true, automatic);
+            const loadingText = document.getElementById('loading-text');
+            if (loadingText) {
+                loadingText.textContent = automatic
+                    ? '录音已转写，AI正在结合知识库自动回填模板...'
+                    : 'AI正在重新分析完整录音并回填模板...';
+            }
+            document.getElementById('loading-overlay').classList.remove('hidden');
+
+            try {
+                const res = await fetch(`${API_BASE}/api/generate`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({visit_id: visitId, conversation})
+                });
+
+                let data = {};
+                try {
+                    data = await res.json();
+                } catch (_) {}
+
+                if (!res.ok || !data.record) {
+                    throw new Error(data.detail || data.error || `生成失败（HTTP ${res.status}）`);
+                }
+
+                if (requestSequence !== generationSequence || visitId !== currentVisit) return;
+
+                currentRecord = mergeManualSections(data.record, preservedManual);
+                renderRecordEditor(currentRecord);
+                updateInfoPanelFromExtracted(data.extracted);
+
+                document.getElementById('btn-save').disabled = false;
+                document.getElementById('btn-export').disabled = false;
+
+                const status = document.getElementById('auto-fill-status');
+                status.textContent = manualSections.size > 0
+                    ? `自动回填完成，已保留 ${manualSections.size} 个手工修改版块`
+                    : '自动回填完成，请医生逐项审核';
+                status.className = 'text-xs text-center text-green-600 mb-2';
+
+                log(`病历已根据完整录音和知识库自动回填${data.kb_used ? '，已使用本地知识库' : ''}`);
+            } catch (e) {
+                const status = document.getElementById('auto-fill-status');
+                status.textContent = '自动回填失败：' + e.message;
+                status.className = 'text-xs text-center text-red-600 mb-2';
+                log('回填失败: ' + e.message);
+
+                if (!automatic) {
+                    alert('生成失败：' + e.message);
+                }
+            } finally {
+                document.getElementById('loading-overlay').classList.add('hidden');
+                setGenerationState(false, automatic);
+                updateGenerateButton();
+
+                if (pendingAutoGeneration) {
+                    pendingAutoGeneration = false;
+                    setTimeout(() => generateRecord({automatic: true}), 150);
+                }
+            }
+        }
+
+        function escapeAttribute(value) {
+            return escapeHtml(value).replaceAll('`', '&#096;');
+        }
+
+        function getRecordData(record, section) {
+            const value = record?.[section];
+            if (!value) {
+                return {content: '', source: 'manual', needs_confirm: false};
+            }
+            if (typeof value === 'string') {
+                return {content: value, source: 'ai', needs_confirm: false};
+            }
+            return {
+                content: value.content || '',
+                source: value.source || 'ai',
+                needs_confirm: Boolean(value.needs_confirm)
+            };
+        }
+
+        function sectionStyle(data) {
+            if (data.needs_confirm) return 'needs-confirm';
+            if (data.source === 'ai_suggestion') return 'ai-suggestion';
+            if (data.source === 'ai') return 'ai-content';
+            return 'manual-edit';
+        }
+
+        function sectionBadges(data) {
+            const badges = [];
+            if (data.source === 'ai') {
+                badges.push('<span class="section-badge bg-blue-100 text-blue-700">AI生成</span>');
+            }
+            if (data.source === 'ai_suggestion') {
+                badges.push('<span class="section-badge bg-yellow-100 text-yellow-700">AI建议</span>');
+            }
+            if (data.needs_confirm) {
+                badges.push('<span class="section-badge bg-red-100 text-red-700">需确认</span>');
+            }
+            if (data.source === 'manual') {
+                badges.push('<span class="section-badge bg-green-100 text-green-700">手工填写</span>');
+            }
+            return badges.join('');
+        }
+
+        function parseStructuredRows(content) {
+            const text = String(content || '').trim();
+            if (!text) {
+                return [{ur: '', ul: '', lr: '', ll: '', content: ''}];
+            }
+
+            const rowPattern = /牙位（右上：(.*?)；左上：(.*?)；右下：(.*?)；左下：(.*?)）：\s*([\s\S]*?)(?=\n牙位（右上：|$)/g;
+            const rows = [];
+            let match;
+
+            while ((match = rowPattern.exec(text)) !== null) {
+                rows.push({
+                    ur: match[1].trim(),
+                    ul: match[2].trim(),
+                    lr: match[3].trim(),
+                    ll: match[4].trim(),
+                    content: match[5].trim()
+                });
+            }
+
+            if (rows.length > 0) return rows;
+            return [{ur: '', ul: '', lr: '', ll: '', content: text}];
+        }
+
+        function toothRowHtml(section, row = {}) {
+            const rowId = `row-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            return `
+                <div class="structured-row" id="${rowId}" data-section="${escapeAttribute(section)}">
+                    <div>
+                        <div class="tooth-chart" title="按患者视角填写牙位">
+                            <input class="tooth-quadrant tooth-ur" data-quadrant="ur"
+                                placeholder="右上" value="${escapeAttribute(row.ur || '')}"
+                                oninput="markManual('${section}')">
+                            <input class="tooth-quadrant tooth-ul" data-quadrant="ul"
+                                placeholder="左上" value="${escapeAttribute(row.ul || '')}"
+                                oninput="markManual('${section}')">
+                            <input class="tooth-quadrant tooth-lr" data-quadrant="lr"
+                                placeholder="右下" value="${escapeAttribute(row.lr || '')}"
+                                oninput="markManual('${section}')">
+                            <input class="tooth-quadrant tooth-ll" data-quadrant="ll"
+                                placeholder="左下" value="${escapeAttribute(row.ll || '')}"
+                                oninput="markManual('${section}')">
+                        </div>
+                        <div class="tooth-hint">牙位四象限</div>
+                    </div>
+                    <textarea class="structured-content"
+                        placeholder="${section === '诊断' ? '请输入诊断' : section === '治疗计划' ? '请输入治疗方案' : '请输入检查结果'}"
+                        oninput="markManual('${section}')">${escapeHtml(row.content || '')}</textarea>
+                    <button type="button" class="remove-row" title="删除本行"
+                        onclick="removeStructuredRow('${rowId}', '${section}')">×</button>
+                </div>
+            `;
+        }
+
+        function structuredSectionHtml(section, label, data) {
+            const rows = parseStructuredRows(data.content);
+            return `
+                <section id="template-section-${section}"
+                    class="template-section ${sectionStyle(data)}"
+                    data-section="${section}">
+                    <div class="template-section-header">
+                        <span class="template-section-title">${label}</span>
+                        <div class="flex items-center gap-2">
+                            <div class="section-badges" id="badges-${section}">${sectionBadges(data)}</div>
+                            <button type="button" class="add-row-button"
+                                onclick="addStructuredRow('${section}')">＋添加牙位</button>
+                        </div>
+                    </div>
+                    <div class="structured-list" id="structured-${section}">
+                        ${rows.map(row => toothRowHtml(section, row)).join('')}
+                    </div>
+                </section>
+            `;
+        }
+
+        function simpleSectionHtml(section, label, data, placeholder) {
+            return `
+                <section id="template-section-${section}"
+                    class="template-section ${sectionStyle(data)}"
+                    data-section="${section}">
+                    <div class="template-section-header">
+                        <span class="template-section-title">${label}</span>
+                        <div class="section-badges" id="badges-${section}">${sectionBadges(data)}</div>
+                    </div>
+                    <textarea id="section-${section}"
+                        class="template-textarea"
+                        placeholder="${placeholder}"
+                        oninput="markManual('${section}')">${escapeHtml(data.content)}</textarea>
+                </section>
+            `;
+        }
+
+        function renderRecordEditor(record = {}) {
+            const container = document.getElementById('record-editor');
+            const data = {};
+            CLINICAL_SECTIONS.forEach(section => {
+                data[section] = getRecordData(record, section);
+            });
+
+            container.innerHTML = `
+                <div class="space-y-3">
+                    ${simpleSectionHtml('主诉', '主诉', data['主诉'], '请输入患者本次就诊的主要症状、部位和时间')}
+                    ${simpleSectionHtml('现病史', '现病史', data['现病史'], '请输入起病、发展、诱因、伴随症状和既往处理')}
+                    ${simpleSectionHtml('既往史', '既往史', data['既往史'], '请输入系统病史、手术史、用药史等')}
+                    ${structuredSectionHtml('口腔专科检查', '口腔检查', data['口腔专科检查'])}
+                    ${structuredSectionHtml('辅助检查', '辅助检查', data['辅助检查'])}
+                    ${structuredSectionHtml('诊断', '诊断', data['诊断'])}
+                    ${structuredSectionHtml('治疗计划', '治疗计划', data['治疗计划'])}
+                    ${simpleSectionHtml('处置', '处置', data['处置'], '请输入本次已完成的治疗和操作过程')}
+                    ${simpleSectionHtml('医嘱', '医嘱', data['医嘱'], '请输入用药、饮食、注意事项及复诊时间')}
+                    <div class="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-700">
+                        牙位按四象限填写。AI回填内容仍需医生逐项审核，修改后会标记为“手工填写”。
+                    </div>
+                </div>
+            `;
+        }
+
+        function addStructuredRow(section) {
+            const list = document.getElementById(`structured-${section}`);
+            if (!list) return;
+            list.insertAdjacentHTML('beforeend', toothRowHtml(section));
+            markManual(section);
+        }
+
+        function removeStructuredRow(rowId, section) {
+            const row = document.getElementById(rowId);
+            const list = document.getElementById(`structured-${section}`);
+            if (!row || !list) return;
+
+            if (list.querySelectorAll('.structured-row').length <= 1) {
+                row.querySelectorAll('input, textarea').forEach(el => el.value = '');
+            } else {
+                row.remove();
+            }
+            markManual(section);
+        }
+
+        function markManual(section) {
+            manualSections.add(section);
+            if (!currentRecord) currentRecord = emptyRecord();
+            if (!currentRecord[section] || typeof currentRecord[section] !== 'object') {
+                currentRecord[section] = {};
+            }
+
+            currentRecord[section].source = 'manual';
+            currentRecord[section].needs_confirm = false;
+
+            const card = document.getElementById(`template-section-${section}`);
+            if (card) {
+                card.classList.remove('ai-content', 'ai-suggestion', 'needs-confirm');
+                card.classList.add('manual-edit');
+            }
+
+            const badges = document.getElementById(`badges-${section}`);
+            if (badges) {
+                badges.innerHTML = '<span class="section-badge bg-green-100 text-green-700">手工填写</span>';
+            }
+        }
+
+        function serializeStructuredSection(section) {
+            const list = document.getElementById(`structured-${section}`);
+            if (!list) return '';
+
+            const lines = [];
+            list.querySelectorAll('.structured-row').forEach(row => {
+                const getValue = selector => row.querySelector(selector)?.value.trim() || '';
+                const ur = getValue('[data-quadrant="ur"]');
+                const ul = getValue('[data-quadrant="ul"]');
+                const lr = getValue('[data-quadrant="lr"]');
+                const ll = getValue('[data-quadrant="ll"]');
+                const content = getValue('.structured-content');
+
+                if (!ur && !ul && !lr && !ll && !content) return;
+
+                const hasTooth = ur || ul || lr || ll;
+                const prefix = hasTooth
+                    ? `牙位（右上：${ur}；左上：${ul}；右下：${lr}；左下：${ll}）：`
+                    : '';
+                lines.push(`${prefix}${content}`.trim());
+            });
+
+            return lines.join('\n');
+        }
+
+        function collectTemplateSections() {
+            const sections = {};
+
+            CLINICAL_SECTIONS.forEach(name => {
+                const content = STRUCTURED_SECTIONS.includes(name)
+                    ? serializeStructuredSection(name)
+                    : (document.getElementById(`section-${name}`)?.value.trim() || '');
+
+                sections[name] = {
+                    content,
+                    source: currentRecord?.[name]?.source || 'manual',
+                    needs_confirm: Boolean(currentRecord?.[name]?.needs_confirm)
+                };
+            });
+
+            return sections;
+        }
+
+        function updateInfoPanelFromExtracted(extracted) {
+            if (!extracted) return;
+            const fields = ['主诉', '现病史', '检查所见', '诊断线索'];
+            fields.forEach(f => {
+                const el = document.getElementById(`info-${f}`);
+                if (el && extracted[f]) {
+                    el.textContent = extracted[f];
+                    el.className = 'text-sm text-gray-800';
+                }
+            });
+        }
+
+        // ==================== 保存与导出 ====================
+        async function saveRecord() {
+            if (!currentPatient) {
+                alert('请先选择患者');
+                return;
+            }
+
+            const visitId = await ensureVisit();
+            if (!visitId) return;
+
+            const sections = collectTemplateSections();
+            currentRecord = sections;
+
+            try {
+                const res = await fetch(`${API_BASE}/api/records/${visitId}/update`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({sections})
+                });
+
+                let data = {};
+                try {
+                    data = await res.json();
+                } catch (_) {
+                    // 由状态码统一处理
+                }
+
+                if (!res.ok) {
+                    throw new Error(data.detail || data.error || `保存失败（HTTP ${res.status}）`);
+                }
+
+                document.getElementById('btn-export').disabled = false;
+                log('病历已保存');
+                alert('病历保存成功！');
+            } catch (e) {
+                log('保存失败: ' + e.message);
+                alert('保存失败：' + e.message);
+            }
+        }
+
+        async function exportWord() {
+            if (!currentVisit) return;
+            try {
+                const res = await fetch(`${API_BASE}/api/export/word/${currentVisit}`);
+                if (res.ok) {
+                    const blob = await res.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `病历_${currentPatient.name}_${new Date().toISOString().slice(0,10)}.docx`;
+                    a.click();
+                    log('Word导出成功');
+                }
+            } catch (e) {
+                log('导出失败: ' + e.message);
+            }
+        }
+
+        // ==================== 本地病例问答 ====================
+        function normalizeCaseChatText(text) {
+            let value = String(text || '')
+                .replaceAll('\r\n', '\n')
+                .replaceAll('\r', '\n')
+                .replaceAll('```', '')
+                .replaceAll('*', '');
+
+            const lines = value.split('\n').map(line => {
+                return line
+                    .replace(/^\s*#{1,6}\s*/, '')
+                    .replace(/^\s*>\s*/, '')
+                    .replace(/^\s*[-+•]\s+/, '')
+                    .replace(/\s{2,}/g, ' ')
+                    .trim();
+            });
+
+            const clean = [];
+            let previousBlank = false;
+            for (const line of lines) {
+                const blank = line === '';
+                if (blank && previousBlank) continue;
+                clean.push(line);
+                previousBlank = blank;
+            }
+            return clean.join('\n').trim();
+        }
+
+        function renderClinicalAnswerText(container, text) {
+            const normalized = normalizeCaseChatText(text);
+            const knownHeadings = new Set([
+                '结论概要：',
+                '已有事实：',
+                '图像可见表现：',
+                '辅助判断：',
+                '鉴别考虑：',
+                '仍需确认：',
+                '建议下一步：',
+                '安全提示：'
+            ]);
+
+            normalized.split('\n').forEach(line => {
+                if (!line) {
+                    const spacer = document.createElement('div');
+                    spacer.className = 'h-2';
+                    container.appendChild(spacer);
+                    return;
+                }
+
+                if (knownHeadings.has(line) || (
+                    line.endsWith('：') &&
+                    line.length <= 16 &&
+                    !/^\d+[.、]/.test(line)
+                )) {
+                    const heading = document.createElement('div');
+                    heading.className = 'clinical-answer-heading';
+                    heading.textContent = line;
+                    container.appendChild(heading);
+                    return;
+                }
+
+                const numbered = line.match(/^(\d+)[.、]\s*(.+)$/);
+                if (numbered) {
+                    const row = document.createElement('div');
+                    row.className = 'clinical-answer-item';
+
+                    const number = document.createElement('span');
+                    number.className = 'clinical-answer-number';
+                    number.textContent = numbered[1];
+
+                    const content = document.createElement('span');
+                    content.className = 'min-w-0 flex-1';
+                    content.textContent = numbered[2];
+
+                    row.appendChild(number);
+                    row.appendChild(content);
+                    container.appendChild(row);
+                    return;
+                }
+
+                const paragraph = document.createElement('p');
+                paragraph.className = 'clinical-answer-paragraph';
+                paragraph.textContent = line;
+                container.appendChild(paragraph);
+            });
+        }
+
+        function appendCaseChatMessage(role, text, options = {}) {
+            const panel = document.getElementById('case-chat-messages');
+            if (!panel) return null;
+
+            const wrapper = document.createElement('div');
+            wrapper.className = role === 'user'
+                ? 'flex justify-end'
+                : 'flex justify-start';
+
+            const bubble = document.createElement('div');
+            bubble.className = role === 'user'
+                ? 'max-w-[90%] rounded-xl rounded-br-sm bg-blue-600 text-white px-3 py-2 text-sm whitespace-pre-wrap break-words'
+                : 'max-w-[96%] rounded-xl rounded-bl-sm bg-white border shadow-sm px-3 py-3 text-sm text-gray-800 break-words';
+
+            if (options.loading) {
+                bubble.textContent = '本地模型正在阅读病例...';
+                bubble.classList.add('text-gray-500');
+                bubble.dataset.loading = '1';
+            } else if (role === 'assistant') {
+                renderClinicalAnswerText(bubble, text);
+            } else {
+                bubble.textContent = text;
+            }
+
+            wrapper.appendChild(bubble);
+            panel.appendChild(wrapper);
+            panel.scrollTop = panel.scrollHeight;
+            return wrapper;
+        }
+
+        function appendCaseSystemMessage(text) {
+            const panel = document.getElementById('case-chat-messages');
+            if (!panel) return;
+
+            const message = document.createElement('div');
+            message.className = 'text-center text-[11px] text-gray-400 px-2';
+            message.textContent = text;
+            panel.appendChild(message);
+            panel.scrollTop = panel.scrollHeight;
+        }
+
+        function clearCaseChat(showMessage = true) {
+            caseChatHistory = [];
+            const panel = document.getElementById('case-chat-messages');
+            if (!panel) return;
+
+            panel.innerHTML = '';
+            const notice = document.createElement('div');
+            notice.className = 'rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-700';
+            notice.textContent = currentPatient
+                ? `当前问答对象：${currentPatient.name}。模型会结合录音、病历草稿和知识库回答。`
+                : '选择患者后可基于患者、录音、病历和知识库进行本地问答。';
+            panel.appendChild(notice);
+
+            if (showMessage) {
+                document.getElementById('case-chat-status').textContent = '问答记录已清空';
+            }
+        }
+
+        function askQuickCaseQuestion(question) {
+            const input = document.getElementById('case-chat-input');
+            input.value = question;
+            sendCaseQuestion();
+        }
+
+        function handleCaseChatKeydown(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendCaseQuestion();
+            }
+        }
+
+        function setCaseChatState(active) {
+            isCaseChatting = active;
+            const send = document.getElementById('case-chat-send');
+            const input = document.getElementById('case-chat-input');
+            send.disabled = active;
+            input.disabled = active;
+            send.textContent = active ? '思考中' : '发送';
+        }
+
+        async function sendCaseQuestion() {
+            if (isCaseChatting) return;
+            if (!currentPatient) {
+                alert('请先选择患者');
+                return;
+            }
+
+            const input = document.getElementById('case-chat-input');
+            const question = input.value.trim();
+            if (!question) return;
+
+            const visitId = await ensureVisit();
+            if (!visitId) return;
+
+            let recordSnapshot = {};
+            try {
+                recordSnapshot = collectTemplateSections();
+            } catch (_) {
+                recordSnapshot = currentRecord || {};
+            }
+
+            appendCaseChatMessage('user', question);
+            caseChatHistory.push({role: 'user', content: question});
+            input.value = '';
+
+            const loadingNode = appendCaseChatMessage('assistant', '', {loading: true});
+            const status = document.getElementById('case-chat-status');
+            status.textContent = '正在调用本机模型，不会上传到外部服务';
+            setCaseChatState(true);
+
+            try {
+                const res = await fetch(`${API_BASE}/api/chat`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        patient_id: currentPatient.id,
+                        visit_id: visitId,
+                        question,
+                        conversation,
+                        record: recordSnapshot,
+                        history: caseChatHistory.slice(-9, -1)
+                    })
+                });
+
+                let data = {};
+                try {
+                    data = await res.json();
+                } catch (_) {}
+
+                if (!res.ok || !data.answer) {
+                    throw new Error(data.detail || `问答失败（HTTP ${res.status}）`);
+                }
+
+                const cleanAnswer = normalizeCaseChatText(data.answer);
+                loadingNode?.remove();
+                appendCaseChatMessage('assistant', cleanAnswer);
+                caseChatHistory.push({role: 'assistant', content: cleanAnswer});
+                caseChatHistory = caseChatHistory.slice(-10);
+                status.textContent = `回答来自本机模型 ${data.local_model || ''}，请医生审核`;
+                log('完成一次本地病例问答');
+            } catch (e) {
+                loadingNode?.remove();
+                appendCaseChatMessage(
+                    'assistant',
+                    '问答失败：' + e.message + '\n请确认右上角显示“LLM就绪”。'
+                );
+                status.textContent = '问答失败';
+                log('本地病例问答失败：' + e.message);
+            } finally {
+                setCaseChatState(false);
+                input.focus();
+            }
+        }
+
+        // ==================== 工具函数 ====================
+        function log(msg) {
+            const panel = document.getElementById('log-panel');
+            const time = new Date().toLocaleTimeString();
+            panel.innerHTML = `<p class="text-gray-600">[${time}] ${msg}</p>` + panel.innerHTML;
+        }
+
+        // 通过病历系统后端检查LLM，避免浏览器跨域访问 llama.cpp
+        async function checkLLM() {
+            const status = document.getElementById('llm-status');
+
+            try {
+                const res = await fetch('/api/health', {
+                    method: 'GET',
+                    cache: 'no-store'
+                });
+                const data = await res.json();
+                const connected = res.ok
+                    && data.llm
+                    && data.llm.status === 'ok'
+                    && data.llm.model_name_matches !== false;
+
+                if (connected) {
+                    status.innerHTML = '<span class="w-2 h-2 bg-green-500 rounded-full"></span> LLM就绪';
+                    status.className = 'px-3 py-1 rounded-full text-xs bg-green-100 text-green-700 flex items-center gap-1';
+                } else {
+                    status.innerHTML = '<span class="w-2 h-2 bg-red-500 rounded-full"></span> LLM未连接';
+                    status.className = 'px-3 py-1 rounded-full text-xs bg-red-100 text-red-700 flex items-center gap-1';
+                }
+            } catch (e) {
+                status.innerHTML = '<span class="w-2 h-2 bg-red-500 rounded-full"></span> LLM未连接';
+                status.className = 'px-3 py-1 rounded-full text-xs bg-red-100 text-red-700 flex items-center gap-1';
+            }
+        }
+
+        // 页面打开即显示标准门诊模板，患者选择后可直接手工填写。
+        restoreAutoFillSetting();
+        setSpeaker('mixed');
+        currentRecord = emptyRecord();
+        renderRecordEditor(currentRecord);
+        updateRecordingAvailability();
+        clearCaseChat(false);
+
+        setInterval(checkLLM, 5000);
+        checkLLM();
+    </script>
+    <script src="/static/multi_patient_v2.js?v=2.3"></script>
+    <script src="/static/multimodal_v2_1.js?v=2.3"></script>
+    <script src="/static/clinical_ui_v2_2.js?v=2.3"></script>
+</body>
+</html>
