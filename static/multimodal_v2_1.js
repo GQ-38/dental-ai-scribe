@@ -340,12 +340,51 @@
             alert("请先选择患者");
             return;
         }
-        await uploadCaseImageFiles(files, workspace);
+        try {
+            const selected = [...(files || [])];
+            if (!selected.length) return;
+            const status = document.getElementById("text-import-status");
+            if (status) status.textContent = `正在上传 ${selected.length} 张图片…`;
+            const uploaded = await uploadCaseImageFiles(selected, workspace);
+            if (status) {
+                status.textContent = uploaded.length
+                    ? `已成功上传 ${uploaded.length} 张图片，可继续填写描述或智能归档`
+                    : "图片未上传成功，请查看页面提示";
+            }
+        } catch (error) {
+            const status = document.getElementById("text-import-status");
+            if (status) status.textContent = "图片上传失败：" + error.message;
+            alert("图片上传失败：" + error.message);
+        }
     }
 
     window.handleCaseImageSelect = async event => {
-        const files = event.target.files || [];
+        // FileList 会随着 input.value 清空而失效，必须先复制成普通数组。
+        const files = [...(event.target.files || [])];
         event.target.value = "";
+        await handleImageFiles(files);
+    };
+
+    window.handleCaseImageDrag = (event, active) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const zone = document.getElementById("case-image-drop-zone");
+        if (zone) zone.classList.toggle("drop-zone-active", Boolean(active));
+        if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    };
+
+    window.handleCaseImageDrop = async event => {
+        event.preventDefault();
+        event.stopPropagation();
+        const zone = document.getElementById("case-image-drop-zone");
+        if (zone) zone.classList.remove("drop-zone-active");
+        const files = [...(event.dataTransfer?.files || [])]
+            .filter(file => (file.type || "").startsWith("image/") ||
+                /\.(jpe?g|png|webp|bmp)$/i.test(file.name || ""));
+        if (!files.length) {
+            alert("拖入的文件中没有支持的图片");
+            return;
+        }
         await handleImageFiles(files);
     };
 

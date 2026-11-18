@@ -6,6 +6,7 @@ __pycache__/
 .env.local
 launcher-config.local.ps1
 data/*.db
+data/llm_config.json
 data/case_images/
 exports/*
 logs/*

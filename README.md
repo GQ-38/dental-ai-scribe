@@ -1,4 +1,10 @@
-# Dental AI Scribe - 口腔AI病历助手
+# 诊记-口腔AI病例助手
+
+## v2.4 本地模型与在线 API 切换
+
+- 页面右上角新增“模型设置”。
+- 支持本地 llama.cpp 与 OpenAI 兼容在线 API 切换。
+- 支持连接测试，API Key 仅保存在本机并排除在 Git 提交之外。
 
 ## v1.6 门诊模板版
 
@@ -112,6 +118,22 @@ v1.7 默认开启自动回填：
 6. 访问 `http://127.0.0.1:8000/api/health` 检查配置
 
 详细说明见 [RUN_GUIDE.md](RUN_GUIDE.md)。
+
+## 本地模型与在线 API 切换
+
+系统支持两种大模型调用方式，病历生成、病例问答和图片分析会统一使用当前选择的模型：
+
+1. 本地模型：继续使用 llama.cpp 的 OpenAI 兼容接口。
+2. 在线 API：支持 OpenAI、DeepSeek、通义千问等提供的 OpenAI 兼容 `chat/completions` 接口。
+
+启动系统后，点击右上角“模型设置”：
+
+- 选择“在线 API”。
+- 填写完整接口地址，例如 `https://api.openai.com/v1/chat/completions`。
+- 填写服务商要求的模型名称和 API Key。
+- 先点击“测试连接”，成功后点击“保存并使用”。
+
+API Key 仅保存在本机的 `data/llm_config.json` 中。该文件已经加入 `.gitignore`，不会随 Git 提交。请勿在 README、代码或截图中公开密钥。调用在线 API 时，医患对话和病历上下文会发送给所选服务商，使用真实患者数据前应完成隐私、授权和合规评估。
 
 ## 系统特点
 

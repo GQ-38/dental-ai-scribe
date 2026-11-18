@@ -12,8 +12,8 @@ $LlamaPort = 8080
 $AppHost = "127.0.0.1"
 $AppPort = 8000
 
-# Reduced memory configuration
-$ContextSize = 4096
+# 0 表示使用模型文件声明的原生上下文长度，不人为设置上限。
+$ContextSize = 0
 $ParallelSlots = 1
 
 $ModelStartupTimeoutSeconds = 360
@@ -21,5 +21,5 @@ $AppStartupTimeoutSeconds = 90
 
 
 # The launcher restarts port 8000 when an older project version is running.
-$ExpectedAppVersion = "2.3"
+$ExpectedAppVersion = "2.4"
 $RestartAppWhenVersionDiffers = $true

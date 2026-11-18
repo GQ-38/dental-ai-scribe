@@ -1,5 +1,5 @@
 """
-Dental AI Scribe - 口腔AI病历助手
+诊记-口腔AI病例助手
 针对 llama.cpp (Qwen3.5-9B) + Faster-Whisper 本地部署优化
 
 启动前请确保：
@@ -103,6 +103,7 @@ LLAMA_CPP_URL = os.getenv(
     "http://127.0.0.1:8080/v1/chat/completions"
 ).strip()
 MODEL_NAME = os.getenv("MODEL_NAME", "dental-qwen").strip()
+LLM_CONFIG_PATH = project_path(os.getenv("LLM_CONFIG_PATH", "data/llm_config.json"))
 
 LLM_TIMEOUT_SECONDS = env_float("LLM_TIMEOUT_SECONDS", 240.0, 10.0)
 LLM_MAX_TOKENS_EXTRACTION = env_int("LLM_MAX_TOKENS_EXTRACTION", 2048, 256)
@@ -134,9 +135,9 @@ AUDIO_UPLOAD_CHUNK_BYTES = AUDIO_UPLOAD_CHUNK_MB * 1024 * 1024
 
 MAX_TEXT_FILE_SIZE_MB = env_int("MAX_TEXT_FILE_SIZE_MB", 20, 1)
 MAX_TEXT_FILE_SIZE_BYTES = MAX_TEXT_FILE_SIZE_MB * 1024 * 1024
-MAX_IMPORTED_TEXT_CHARS = env_int("MAX_IMPORTED_TEXT_CHARS", 21600, 2000)
+MAX_IMPORTED_TEXT_CHARS = env_int("MAX_IMPORTED_TEXT_CHARS", 0, 0)
 TRANSCRIPT_CHUNK_CHARS = env_int("TRANSCRIPT_CHUNK_CHARS", 1800, 800)
-MAX_TRANSCRIPT_CHUNKS = env_int("MAX_TRANSCRIPT_CHUNKS", 12, 1)
+MAX_TRANSCRIPT_CHUNKS = env_int("MAX_TRANSCRIPT_CHUNKS", 0, 0)
 
 VISION_ENABLED = env_bool("VISION_ENABLED", True)
 LLM_MAX_TOKENS_VISION = env_int("LLM_MAX_TOKENS_VISION", 3072, 512)
@@ -214,8 +215,8 @@ def validate_config() -> List[str]:
 CONFIG_WARNINGS = validate_config()
 
 # ==================== 初始化 ====================
-APP_VERSION = "2.3"
-app = FastAPI(title="Dental AI Scribe", version=APP_VERSION)
+APP_VERSION = "2.4"
+app = FastAPI(title="诊记-口腔AI病例助手", version=APP_VERSION)
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 # Whisper模型（延迟加载，避免启动过慢）
@@ -365,6 +366,82 @@ class RecordGenerateRequest(BaseModel):
 class RecordUpdateRequest(BaseModel):
     sections: Dict[str, Any]
 
+
+class LLMConfigUpdate(BaseModel):
+    mode: str = "local"
+    api_url: str = ""
+    api_key: str = ""
+    model: str = ""
+
+
+def load_llm_config() -> Dict[str, Any]:
+    default = {
+        "mode": "local",
+        "api_url": LLAMA_CPP_URL,
+        "api_key": "",
+        "model": MODEL_NAME
+    }
+    if not LLM_CONFIG_PATH.exists():
+        return default
+    try:
+        saved = json.loads(LLM_CONFIG_PATH.read_text(encoding="utf-8"))
+        if not isinstance(saved, dict):
+            return default
+        mode = str(saved.get("mode") or "local").strip().lower()
+        return {
+            "mode": mode if mode in {"local", "api"} else "local",
+            "api_url": str(saved.get("api_url") or default["api_url"]).strip(),
+            "api_key": str(saved.get("api_key") or "").strip(),
+            "model": str(saved.get("model") or default["model"]).strip()
+        }
+    except Exception as exc:
+        print(f"[!] 读取模型配置失败，已使用本地模型配置：{exc}")
+        return default
+
+
+def save_llm_config(config: Dict[str, Any]) -> None:
+    LLM_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    temporary = LLM_CONFIG_PATH.with_suffix(".tmp")
+    temporary.write_text(
+        json.dumps(config, ensure_ascii=False, indent=2),
+        encoding="utf-8"
+    )
+    temporary.replace(LLM_CONFIG_PATH)
+
+
+def public_llm_config(config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    config = config or load_llm_config()
+    return {
+        "mode": config["mode"],
+        "api_url": config["api_url"],
+        "model": config["model"],
+        "has_api_key": bool(config.get("api_key"))
+    }
+
+
+def normalize_llm_config(req: LLMConfigUpdate) -> Dict[str, Any]:
+    mode = req.mode.strip().lower()
+    if mode not in {"local", "api"}:
+        raise HTTPException(status_code=400, detail="模型模式只能是 local 或 api")
+    existing = load_llm_config()
+    api_url = req.api_url.strip() or (
+        LLAMA_CPP_URL if mode == "local" else existing.get("api_url", "")
+    )
+    model = req.model.strip() or (
+        MODEL_NAME if mode == "local" else existing.get("model", "")
+    )
+    api_key = req.api_key.strip()
+    if api_key == "__KEEP__":
+        api_key = str(existing.get("api_key") or "")
+    if mode == "api":
+        if not api_url.startswith(("http://", "https://")):
+            raise HTTPException(status_code=400, detail="API 地址必须以 http:// 或 https:// 开头")
+        if not model:
+            raise HTTPException(status_code=400, detail="请填写 API 模型名称")
+        if not api_key:
+            raise HTTPException(status_code=400, detail="请填写 API Key")
+    return {"mode": mode, "api_url": api_url, "api_key": api_key, "model": model}
+
 # ==================== 页面路由 ====================
 @app.get("/", response_class=HTMLResponse)
 async def index():
@@ -376,11 +453,24 @@ async def index():
 # ==================== 健康检查 ====================
 @app.get("/api/health")
 async def health_check():
+    active = load_llm_config()
     llm_status: Dict[str, Any] = {
         "status": "unreachable",
-        "url": LLAMA_CPP_URL,
+        "mode": active["mode"],
+        "url": active["api_url"],
+        "model": active["model"],
         "models": []
     }
+
+    if active["mode"] == "api":
+        llm_status["status"] = "configured" if active.get("api_key") else "missing_api_key"
+        return {
+            "app": "ok", "version": APP_VERSION, "llm": llm_status,
+            "vision": {"enabled": VISION_ENABLED, "max_images_per_analysis": MAX_IMAGES_PER_ANALYSIS},
+            "whisper": {"model": WHISPER_MODEL, "device": WHISPER_DEVICE, "compute_type": WHISPER_COMPUTE_TYPE, "loaded": _whisper_model is not None},
+            "storage": {"database": str(DB_PATH), "exports": str(EXPORT_DIR), "models": str(WHISPER_MODEL_DIR)},
+            "warnings": CONFIG_WARNINGS
+        }
 
     base_url = llama_base_url()
     async with httpx.AsyncClient(timeout=5.0) as client:
@@ -425,6 +515,35 @@ async def health_check():
             "models": str(WHISPER_MODEL_DIR)
         },
         "warnings": CONFIG_WARNINGS
+    }
+
+
+@app.get("/api/llm/config")
+async def get_llm_config():
+    return public_llm_config()
+
+
+@app.put("/api/llm/config")
+async def update_llm_config(req: LLMConfigUpdate):
+    config = normalize_llm_config(req)
+    save_llm_config(config)
+    return {"saved": True, "config": public_llm_config(config)}
+
+
+@app.post("/api/llm/test")
+async def test_llm_config(req: LLMConfigUpdate):
+    config = normalize_llm_config(req)
+    answer = await call_llm(
+        [{"role": "user", "content": "请只回复：连接成功"}],
+        temperature=0,
+        max_tokens=20,
+        config_override=config
+    )
+    return {
+        "ok": True,
+        "message": "连接成功",
+        "model": config["model"],
+        "response": answer[:100]
     }
 
 
@@ -816,6 +935,8 @@ def extract_pdf_text(content: bytes) -> str:
 
 def limit_imported_text(text: str) -> tuple[str, bool, int]:
     original_chars = len(text)
+    if MAX_IMPORTED_TEXT_CHARS <= 0:
+        return text, False, original_chars
     if original_chars <= MAX_IMPORTED_TEXT_CHARS:
         return text, False, original_chars
 
@@ -1521,30 +1642,40 @@ async def call_llm(
     temperature: float = 0.3,
     max_tokens: int = 4096,
     require_json: bool = False,
-    extra_payload: Optional[Dict[str, Any]] = None
+    extra_payload: Optional[Dict[str, Any]] = None,
+    config_override: Optional[Dict[str, Any]] = None
 ) -> str:
-    """调用 llama.cpp 的 OpenAI 兼容接口。"""
+    """调用本地 llama.cpp 或在线 OpenAI 兼容接口。"""
+    active = config_override or load_llm_config()
+    endpoint = active["api_url"]
+    model_name = active["model"]
     payload: Dict[str, Any] = {
-        "model": MODEL_NAME,
+        "model": model_name,
         "messages": messages,
         "temperature": temperature,
-        "max_tokens": max_tokens,
-        "stop": ["<|im_end|>", "<|endoftext|>"]
+        "max_tokens": max_tokens
     }
 
-    if extra_payload:
-        payload.update(extra_payload)
+    if active["mode"] == "local":
+        payload["stop"] = ["<|im_end|>", "<|endoftext|>"]
 
     if require_json and LLM_JSON_MODE:
         payload["response_format"] = {"type": "json_object"}
 
-    if LLM_DISABLE_THINKING:
+    if extra_payload:
+        payload.update(extra_payload)
+
+    if LLM_DISABLE_THINKING and active["mode"] == "local":
         payload["chat_template_kwargs"] = {"enable_thinking": False}
         payload["reasoning_effort"] = "none"
 
+    headers = {"Content-Type": "application/json"}
+    if active.get("api_key"):
+        headers["Authorization"] = f"Bearer {active['api_key']}"
+
     async with httpx.AsyncClient(timeout=LLM_TIMEOUT_SECONDS) as client:
         try:
-            response = await client.post(LLAMA_CPP_URL, json=payload)
+            response = await client.post(endpoint, json=payload, headers=headers)
 
             # 某些旧版 llama.cpp 不支持 response_format 或 thinking 参数，自动降级重试。
             if response.status_code in {400, 404, 422} and (
@@ -1556,7 +1687,7 @@ async def call_llm(
                 fallback_payload.pop("response_format", None)
                 fallback_payload.pop("chat_template_kwargs", None)
                 fallback_payload.pop("reasoning_effort", None)
-                response = await client.post(LLAMA_CPP_URL, json=fallback_payload)
+                response = await client.post(endpoint, json=fallback_payload, headers=headers)
 
             response.raise_for_status()
             data = response.json()
@@ -1566,8 +1697,7 @@ async def call_llm(
             raise HTTPException(
                 status_code=503,
                 detail=(
-                    "无法连接本地大模型服务。请先启动 llama-server，并检查 "
-                    f"LLAMA_CPP_URL={LLAMA_CPP_URL}"
+                    "无法连接大模型服务，请检查模型设置中的 API 地址、网络连接和服务状态。"
                 )
             ) from exc
         except httpx.TimeoutException as exc:
@@ -1583,7 +1713,10 @@ async def call_llm(
                 pass
             raise HTTPException(
                 status_code=502,
-                detail=f"大模型接口返回 HTTP {exc.response.status_code}：{response_text or exc}"
+                detail=(
+                    f"大模型接口返回 HTTP {exc.response.status_code}：{response_text or exc}。"
+                    "请检查 API Key、模型名称和账户余额。"
+                )
             ) from exc
         except HTTPException:
             raise
@@ -1595,18 +1728,40 @@ async def call_llm(
 
 
 def extract_json_from_text(text: str) -> Optional[Dict]:
-    """从模型输出中提取JSON块"""
-    try:
-        if "```json" in text:
-            json_str = text.split("```json")[1].split("```")[0]
-        elif "```" in text:
-            json_str = text.split("```")[1].split("```")[0]
-        else:
-            # 尝试直接解析
-            json_str = text
-        return json.loads(json_str.strip())
-    except Exception:
+    """从模型输出中提取首个完整JSON对象，兼容代码块和思考标签。"""
+    if not isinstance(text, str) or not text.strip():
         return None
+
+    cleaned = re.sub(r"<think>[\s\S]*?</think>", "", text, flags=re.IGNORECASE)
+    cleaned = re.sub(r"<think>[\s\S]*$", "", cleaned, flags=re.IGNORECASE)
+    candidates = []
+    candidates.extend(
+        match.group(1).strip()
+        for match in re.finditer(
+            r"```(?:json)?\s*([\s\S]*?)```",
+            cleaned,
+            flags=re.IGNORECASE
+        )
+    )
+    candidates.append(cleaned.strip())
+
+    decoder = json.JSONDecoder()
+    for candidate in candidates:
+        try:
+            value = json.loads(candidate)
+            if isinstance(value, dict):
+                return value
+        except Exception:
+            pass
+
+        for match in re.finditer(r"\{", candidate):
+            try:
+                value, _ = decoder.raw_decode(candidate[match.start():])
+                if isinstance(value, dict):
+                    return value
+            except Exception:
+                continue
+    return None
 
 # ==================== 知识库 ====================
 def load_kb() -> Dict:
@@ -1670,8 +1825,8 @@ EXTRACTION_PROMPT = """你是口腔门诊病历信息提取助手。请只依据
 【核心原则】
 1. 录音没有提到的事实不得补写、猜测或套用常规模板。
 2. 区分患者描述、医生检查结论和医生治疗建议。
-3. 医患混合且说话人未区分时，只在语义明确时归类；有歧义就放入“需确认事项”。
-4. 牙位优先转换为FDI两位数记录法；无法确定具体牙位时保留原部位并标注需确认。
+3. 医患混合且说话人未区分时，根据“患者自述、医生询问、医生检查、医生建议”等语义归类。
+4. 所有牙位表达必须原样保留，包括FDI编号和“左下后牙、右上第一磨牙”等中文部位，不要自行换算牙名。
 5. 知识库只用于后续术语规范和建议，不能作为患者已经存在某项体征的证据。
 
 【提取字段】
@@ -1683,7 +1838,7 @@ EXTRACTION_PROMPT = """你是口腔门诊病历信息提取助手。请只依据
 - 已行处置：录音中明确已经完成的操作。
 - 医嘱：录音中明确交代的注意事项和复诊安排。
 - 诊断线索：仅列与录音证据相符的候选关键词。
-- 需确认事项：牙位、时间、病史、检查等不清楚的信息。
+- 需确认事项：只记录会影响临床判断且对话确实存在矛盾的信息，不要写“牙位需确认”之类占位语。
 
 【输出格式】只输出JSON，不要解释：
 {{"主诉":"","现病史":"","既往史":"","检查所见":"","辅助检查":"","已行处置":"","医嘱":"","诊断线索":[],"需确认事项":[]}}"""
@@ -1702,11 +1857,14 @@ RECORD_PROMPT = """你是口腔门诊病历书写助手。请依据患者信息�
 【安全与证据规则】
 1. 客观病史、检查结果、辅助检查、已行处置只能来自患者信息或录音证据。
 2. 知识库只能用于专业术语规范、候选诊断和治疗建议，不能捏造患者体征。
-3. 录音未提及的字段保持空字符串，不要自动写“正常”“无异常”或虚构阴性结果。
+3. 模板字段不得留空。录音未涉及的字段用一句最短的“未记录”说明，不得写成患者阴性事实。
 4. 诊断和治疗计划均为AI建议，必须 needs_confirm=true。
-5. 牙位不明确时保留空牙位，并在内容中写“牙位需确认”。
+5. 禁止在content中写“牙位需确认”“牙位待确认”。有FDI编号时原样保留；只有象限或区域时填写“后牙区、前牙区”等原始部位；完全没有部位信息时四象限留空。
 6. 不要在content正文中加入“【AI生成】”“【AI建议】”等前缀，来源由source字段标记。
 7. 内容应为可直接进入病历模板的专业中文，不写分析过程。
+8. 使用真实门诊病历的短语式表达：删除“根据对话、考虑可能、建议进一步”等解释性套话；每条尽量控制在5～25字。
+9. 同一检查结论/诊断/方案涉及多颗牙时可合并牙位；不同结论必须拆成多行，做到“一组牙位对应一条内容”。
+10. 只要录音或提取结果出现明确牙位，该条对应的四象限就必须填写，不得把牙位只留在正文里。
 
 【模板字段】
 - 主诉：症状+部位+时间，简洁。
@@ -1722,10 +1880,11 @@ RECORD_PROMPT = """你是口腔门诊病历书写助手。请依据患者信息�
 【牙位结构格式】
 “口腔专科检查、辅助检查、诊断、治疗计划”的content必须使用下列可解析格式。
 每一个牙位/部位单独一行：
-牙位（右上：16；左上：；右下：；左下：）：16牙远中邻面深龋，探诊敏感
-牙位（右上：；左上：26；右下：；左下：）：26牙烤瓷冠边缘不密合
+牙位（右上：6；左上：；右下：；左下：）：16远中邻面深龋，探敏
+牙位（右上：；左上：6；右下：；左下：）：26烤瓷冠边缘不密合
+牙位（右上：6、5、4；左上：1、2、3；右下：；左下：）：上前牙及右上后牙烤瓷冠边缘不密合
 
-四个象限都必须保留；没有对应牙位时留空。
+四个象限都必须保留；象限框内使用该象限内的牙齿序号1～8，正文可以保留完整FDI编号。没有对应牙位时留空。
 全口或无具体牙位内容示例：
 牙位（右上：；左上：；右下：；左下：）：全口牙龈红肿，探诊出血
 
@@ -1740,6 +1899,166 @@ RECORD_PROMPT = """你是口腔门诊病历书写助手。请依据患者信息�
 "处置":{{"content":"","source":"ai","needs_confirm":false}},
 "医嘱":{{"content":"","source":"ai_suggestion","needs_confirm":true}}}}"""
 
+STRUCTURED_RECORD_SECTIONS = ["口腔专科检查", "辅助检查", "诊断", "治疗计划"]
+EMPTY_SECTION_TEXT = {
+    "主诉": "未记录明确主诉。",
+    "现病史": "未记录完整现病史。",
+    "既往史": "未记录既往史及过敏史。",
+    "口腔专科检查": "未记录口腔检查结果。",
+    "辅助检查": "未记录辅助检查结果。",
+    "诊断": "信息不足，暂无法诊断。",
+    "治疗计划": "信息不足，暂无法制定方案。",
+    "处置": "未记录本次处置。",
+    "医嘱": "未记录明确医嘱。"
+}
+
+
+def tooth_quadrant_from_fdi(number: str) -> Optional[str]:
+    if len(number) != 2:
+        return None
+    if number[0] in "1234" and number[1] in "12345678":
+        return {"1": "ur", "2": "ul", "3": "ll", "4": "lr"}[number[0]]
+    if number[0] in "5678" and number[1] in "12345":
+        return {"5": "ur", "6": "ul", "7": "ll", "8": "lr"}[number[0]]
+    return None
+
+
+def extract_quadrant_values(content: str) -> Dict[str, str]:
+    values: Dict[str, List[str]] = {"ur": [], "ul": [], "lr": [], "ll": []}
+    for number in re.findall(r"(?<!\d)([1-4][1-8]|[5-8][1-5])\s*牙?", content):
+        quadrant = tooth_quadrant_from_fdi(number)
+        # 四象限牙位图采用象限内序号；完整FDI编号保留在正文。
+        local_number = number[1]
+        if quadrant and local_number not in values[quadrant]:
+            values[quadrant].append(local_number)
+
+    location_map = {"右上": "ur", "左上": "ul", "右下": "lr", "左下": "ll"}
+    location_pattern = re.compile(
+        r"(右上|左上|右下|左下)\s*"
+        r"(第?[一二三四五六七八1-8]?(?:恒|乳)?(?:中切牙|侧切牙|尖牙|前磨牙|磨牙)|前牙区|后牙区|前牙|后牙)"
+    )
+    for match in location_pattern.finditer(content):
+        quadrant = location_map[match.group(1)]
+        value = match.group(2)
+        if value and value not in values[quadrant]:
+            values[quadrant].append(value)
+
+    # 兼容诊室口语：“左上五、六”“右下6和7”“左下三、右下三”。
+    chinese_digit_map = {
+        "一": "1", "二": "2", "三": "3", "四": "4",
+        "五": "5", "六": "6", "七": "7", "八": "8"
+    }
+    spoken_pattern = re.compile(
+        r"(右上|左上|右下|左下)\s*(?:第)?\s*"
+        r"([一二三四五六七八1-8](?:\s*[、,，和及]\s*[一二三四五六七八1-8])*)"
+        r"\s*(?:牙|颗)?"
+    )
+    for match in spoken_pattern.finditer(content):
+        quadrant = location_map[match.group(1)]
+        for digit in re.findall(r"[一二三四五六七八1-8]", match.group(2)):
+            value = chinese_digit_map.get(digit, digit)
+            if value not in values[quadrant]:
+                values[quadrant].append(value)
+    return {key: "、".join(items) for key, items in values.items()}
+
+
+def normalize_quadrant_entry(value: str, quadrant: str) -> str:
+    """把象限框中的完整FDI编号压缩为象限内序号，同时保留区域文字。"""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    tokens = re.findall(r"[1-8][1-8]|[1-8]", text)
+    normalized: List[str] = []
+    for token in tokens:
+        if len(token) == 2:
+            if tooth_quadrant_from_fdi(token) == quadrant:
+                token = token[1]
+            else:
+                continue
+        if token not in normalized:
+            normalized.append(token)
+    if normalized:
+        return "、".join(normalized)
+    return text
+
+
+def normalize_structured_record_content(content: Any, empty_text: str) -> str:
+    text = str(content or "").strip()
+    text = re.sub(r"牙位(?:需|待)确认[，。；;：:\s]*", "", text).strip()
+    if not text:
+        text = empty_text
+
+    # 即使模型已经输出结构头，也必须检查空象限；牙位可能只写在正文里。
+    structured_pattern = re.compile(
+        r"牙位[（(]\s*右上\s*[：:]\s*(.*?)\s*[；;]\s*"
+        r"左上\s*[：:]\s*(.*?)\s*[；;]\s*"
+        r"右下\s*[：:]\s*(.*?)\s*[；;]\s*"
+        r"左下\s*[：:]\s*(.*?)\s*[）)]\s*[：:]\s*"
+        r"([\s\S]*?)(?=\n\s*牙位[（(]|$)"
+    )
+    matches = list(structured_pattern.finditer(text))
+    if matches:
+        repaired_rows: List[str] = []
+        for match in matches:
+            row_content = match.group(5).strip()
+            inferred = extract_quadrant_values(row_content)
+            existing = {
+                "ur": normalize_quadrant_entry(match.group(1), "ur"),
+                "ul": normalize_quadrant_entry(match.group(2), "ul"),
+                "lr": normalize_quadrant_entry(match.group(3), "lr"),
+                "ll": normalize_quadrant_entry(match.group(4), "ll")
+            }
+            for quadrant in existing:
+                if not existing[quadrant]:
+                    existing[quadrant] = inferred[quadrant]
+            repaired_rows.append(
+                f"牙位（右上：{existing['ur']}；左上：{existing['ul']}；"
+                f"右下：{existing['lr']}；左下：{existing['ll']}）：{row_content}"
+            )
+        return "\n".join(repaired_rows)
+
+    # 模型未输出结构头时，按自然换行保留“一组牙位对应一条内容”。
+    raw_lines = [
+        re.sub(r"^\s*(?:[-•·]\s*|\d+[.、）)]\s+)", "", line).strip()
+        for line in text.splitlines()
+        if line.strip()
+    ] or [text]
+    formatted_lines: List[str] = []
+    for line in raw_lines:
+        values = extract_quadrant_values(line)
+        formatted_lines.append(
+            f"牙位（右上：{values['ur']}；左上：{values['ul']}；"
+            f"右下：{values['lr']}；左下：{values['ll']}）：{line}"
+        )
+    return "\n".join(formatted_lines)
+
+
+def normalize_generated_record(record: Dict[str, Any]) -> Dict[str, Any]:
+    normalized = dict(record or {})
+    for section in CLINICAL_SECTIONS:
+        data = normalized.get(section)
+        if not isinstance(data, dict):
+            data = {}
+        content = str(data.get("content") or "").strip()
+        if section in STRUCTURED_RECORD_SECTIONS:
+            content = normalize_structured_record_content(
+                content,
+                EMPTY_SECTION_TEXT[section]
+            )
+        elif not content:
+            content = EMPTY_SECTION_TEXT[section]
+        data["content"] = content
+        data.setdefault(
+            "source",
+            "ai_suggestion" if section in {"诊断", "治疗计划", "医嘱"} else "ai"
+        )
+        data.setdefault(
+            "needs_confirm",
+            section in {"诊断", "治疗计划", "医嘱"}
+        )
+        normalized[section] = data
+    return normalized
+
 # ==================== 长录音文字分段提取 ====================
 EXTRACTION_TEXT_FIELDS = [
     "主诉", "现病史", "既往史", "检查所见",
@@ -1747,21 +2066,24 @@ EXTRACTION_TEXT_FIELDS = [
 ]
 EXTRACTION_LIST_FIELDS = ["诊断线索", "需确认事项"]
 
+EXTRACTION_JSON_SCHEMA = {
+    "type": "object",
+    "properties": {
+        **{field: {"type": "string"} for field in EXTRACTION_TEXT_FIELDS},
+        **{
+            field: {"type": "array", "items": {"type": "string"}}
+            for field in EXTRACTION_LIST_FIELDS
+        }
+    },
+    "required": EXTRACTION_TEXT_FIELDS + EXTRACTION_LIST_FIELDS,
+    "additionalProperties": False
+}
+
 
 def split_transcript_text(text: str) -> List[str]:
     text = normalize_imported_text(text)
     if not text:
         return []
-
-    max_total_chars = TRANSCRIPT_CHUNK_CHARS * MAX_TRANSCRIPT_CHUNKS
-    if len(text) > max_total_chars:
-        head_chars = int(max_total_chars * 0.72)
-        tail_chars = max_total_chars - head_chars
-        text = (
-            text[:head_chars]
-            + "\n\n【中间录音内容因上下文限制已省略】\n\n"
-            + text[-tail_chars:]
-        )
 
     paragraphs = [item.strip() for item in text.splitlines() if item.strip()]
     chunks: List[str] = []
@@ -1786,7 +2108,9 @@ def split_transcript_text(text: str) -> List[str]:
     if current:
         chunks.append(current)
 
-    return chunks[:MAX_TRANSCRIPT_CHUNKS]
+    if MAX_TRANSCRIPT_CHUNKS > 0:
+        return chunks[:MAX_TRANSCRIPT_CHUNKS]
+    return chunks
 
 
 def merge_extracted_chunks(parts: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -1854,20 +2178,43 @@ async def extract_conversation_data(conv_text: str) -> tuple[Dict[str, Any], int
         else:
             segment = chunk
 
-        extraction_msg = EXTRACTION_PROMPT.format(conversation=segment)
-        extraction_raw = await call_llm(
-            [{"role": "user", "content": extraction_msg}],
-            temperature=0.1,
-            max_tokens=LLM_MAX_TOKENS_EXTRACTION,
-            require_json=True
-        )
-        extracted = extract_json_from_text(extraction_raw)
+        extraction_msg = "/no_think\n" + EXTRACTION_PROMPT.format(conversation=segment)
+        extracted = None
+        for attempt in range(2):
+            if attempt:
+                extraction_msg += (
+                    "\n\n上一次输出格式无效。请重新读取原文，只输出一个完整JSON对象，"
+                    "不要解释、不要思考过程、不要Markdown代码块。"
+                )
+            extraction_raw = await call_llm(
+                [{"role": "user", "content": extraction_msg}],
+                temperature=0.0,
+                max_tokens=max(LLM_MAX_TOKENS_EXTRACTION, 4096),
+                require_json=True,
+                extra_payload={
+                    "response_format": {
+                        "type": "json_schema",
+                        "json_schema": {
+                            "name": "dental_extraction",
+                            "strict": True,
+                            "schema": EXTRACTION_JSON_SCHEMA
+                        }
+                    }
+                }
+            )
+            extracted = extract_json_from_text(extraction_raw)
+            if extracted:
+                break
         if extracted:
             extracted_parts.append(extracted)
         else:
-            extracted_parts.append({
-                "需确认事项": [f"第 {index} 段结构化信息解析失败，需人工核对原文"]
-            })
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    f"第 {index}/{total} 段信息抽取连续两次未返回完整JSON。"
+                    "系统已停止生成，原始对话未丢失，请重试或切换在线API。"
+                )
+            )
 
     return merge_extracted_chunks(extracted_parts), total
 
@@ -1950,6 +2297,10 @@ async def generate_record(req: RecordGenerateRequest):
             "raw": record_raw,
             "主诉": {"content": "【AI生成】解析失败，请查看原始输出\n\n" + record_raw[:500], "source": "ai", "needs_confirm": True}
         }
+    else:
+        # 不把牙位结构的正确性押在模型是否严格输出标点上：
+        # 统一补齐模板字段，并按FDI编号/中文象限确定性回填四象限。
+        record = normalize_generated_record(record)
 
     # 6. 保存到数据库。自动回填会刷新同一次就诊，先清理上一版AI草稿。
     conn = sqlite3.connect(DB_PATH)
@@ -2276,7 +2627,8 @@ async def case_chat(req: CaseChatRequest):
         "patient_id": req.patient_id,
         "visit_id": req.visit_id,
         "kb_used": kb_context,
-        "local_model": MODEL_NAME,
+        "local_model": load_llm_config()["model"],
+        "llm_mode": load_llm_config()["mode"],
         "selected_image_ids": [row[0] for row in selected_rows]
     }
 
@@ -2515,7 +2867,7 @@ async def export_word(visit_id: int):
 # ==================== 启动 ====================
 if __name__ == "__main__":
     print("=" * 60)
-    print("  Dental AI Scribe - 口腔AI病历助手（多模态病例版 v2.1）")
+    print("  诊记-口腔AI病例助手（多模态病例版 v2.4）")
     print("=" * 60)
     print(f"[*] LLM后端: {LLAMA_CPP_URL}")
     print(f"[*] 模型名称: {MODEL_NAME}")

@@ -8,10 +8,10 @@ $LlamaHost = "127.0.0.1"
 $LlamaPort = 8080
 $AppHost = "127.0.0.1"
 $AppPort = 8000
-$ContextSize = 4096
+$ContextSize = 0
 $ParallelSlots = 1
 $ModelStartupTimeoutSeconds = 360
 $AppStartupTimeoutSeconds = 90
-$ExpectedAppVersion = "2.3"
+$ExpectedAppVersion = "2.4"
 $RestartAppWhenVersionDiffers = $true
 

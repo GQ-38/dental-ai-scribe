@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>口腔AI病历助手</title>
+    <title>诊记-口腔AI病例助手</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .ai-content { background-color: #e0f2fe; border-left: 4px solid #0284c7; }
@@ -34,21 +34,21 @@
         .case-image-modal-grid img { width:100%; height:130px; object-fit:cover; border-radius:10px; }
 
         .left-module {
-            margin: 12px 12px 0;
-            padding: 14px;
+            margin: 8px 10px 0;
+            padding: 10px;
             border: 1px solid #e2e8f0;
-            border-radius: 14px;
+            border-radius: 10px;
             background: #ffffff;
             box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
         }
         .left-patient-module { background: linear-gradient(180deg, #f8fbff 0%, #fff 48%); }
-        .left-workflow-module { padding-bottom: 6px; }
+        .left-workflow-module { padding-bottom: 2px; }
         .left-module-heading {
             display:flex;
             align-items:center;
             justify-content:space-between;
             gap:12px;
-            margin-bottom:12px;
+            margin-bottom:6px;
         }
         .left-module-title {
             font-size:15px;
@@ -76,17 +76,18 @@
             font-weight:700;
         }
         .left-subpanel {
-            padding:12px;
-            margin-bottom:10px;
-            border:1px solid #edf2f7;
-            border-radius:12px;
-            background:#fbfdff;
+            padding:8px 2px;
+            margin-bottom:0;
+            border:0;
+            border-top:1px solid #edf2f7;
+            border-radius:0;
+            background:transparent;
         }
         .left-subpanel-heading {
             display:flex;
             align-items:center;
-            gap:9px;
-            margin-bottom:10px;
+            gap:6px;
+            margin-bottom:6px;
         }
         .left-subpanel-heading h3 {
             font-size:13px;
@@ -94,37 +95,46 @@
             color:#334155;
         }
         .left-subpanel-heading p {
-            font-size:10px;
-            color:#94a3b8;
-            margin-top:1px;
+            display:none;
         }
         .left-subpanel-index {
-            width:24px;
-            height:24px;
-            display:inline-flex;
-            align-items:center;
-            justify-content:center;
-            border-radius:8px;
-            background:#f1f5f9;
-            color:#64748b;
-            font-size:10px;
-            font-weight:700;
+            display:none;
         }
         .left-conversation-heading {
-            margin:12px 12px 8px;
-            padding:12px 14px 8px;
+            margin:8px 10px 4px;
+            padding:8px 10px 4px;
             border-top:1px solid #e2e8f0;
             display:flex;
             align-items:center;
             justify-content:space-between;
         }
         .left-auto-fill-panel {
-            margin:0 12px 12px;
-            padding:14px;
+            margin:6px 10px 10px;
+            padding:10px;
             border:1px solid #dbeafe;
             border-radius:14px;
             background:#f8fbff;
         }
+        .workspace-layout { min-height: 0; }
+        .workspace-column { min-height: 0; }
+        .left-column-scroll {
+            min-height: 0;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            scrollbar-gutter: stable;
+        }
+        .left-column-scroll #conversation-list {
+            min-height: 120px;
+            max-height: 240px;
+        }
+        .left-column-scroll #record-btn { padding-top: 10px; padding-bottom: 10px; font-size: 14px; }
+        .left-column-scroll #audio-drop-zone { padding: 8px; border-width: 1px; }
+        .left-column-scroll #audio-drop-zone svg { display: none; }
+        .left-column-scroll #audio-drop-zone p:last-child { display: none; }
+        .left-column-scroll #transcript-text-input { min-height: 58px; height: 58px; }
+        .left-column-scroll #transcript-drop-zone { padding: 6px; border-width: 1px; }
+        .left-column-scroll #transcript-drop-zone p:last-child { display: none; }
+        .left-column-scroll .image-upload-gallery { grid-template-columns: repeat(4, minmax(0, 1fr)); }
         .patient-extra-row {
             display:flex;
             align-items:flex-start;
@@ -499,8 +509,8 @@
         <div class="flex items-center gap-3">
             <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-lg">牙</div>
             <div>
-                <h1 class="text-xl font-bold text-gray-800">口腔AI病历助手</h1>
-                <p class="text-xs text-gray-500">本地部署 · 数据不出诊所</p>
+                <h1 class="text-xl font-bold text-gray-800">诊记-口腔AI病例助手</h1>
+                <p id="llm-mode-description" class="text-xs text-gray-500">支持本地模型与在线API切换</p>
             </div>
         </div>
         <div class="flex items-center gap-3">
@@ -511,16 +521,61 @@
             <div id="llm-status" class="px-3 py-1 rounded-full text-xs bg-green-100 text-green-700 flex items-center gap-1">
                 <span class="w-2 h-2 bg-green-500 rounded-full"></span> LLM就绪
             </div>
+            <button onclick="openLLMSettings()" class="border border-gray-300 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 transition text-sm font-medium">
+                模型设置
+            </button>
             <button onclick="showPatientModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm font-medium">
                 + 患者
             </button>
         </div>
     </header>
 
+    <!-- 大模型设置 -->
+    <div id="llm-settings-modal" class="hidden fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl w-[560px] max-w-[94vw] p-6">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h3 class="font-bold text-lg">大模型设置</h3>
+                    <p class="text-xs text-gray-500 mt-1">选择本地模型，或接入 OpenAI 兼容 API</p>
+                </div>
+                <button onclick="closeLLMSettings()" class="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">调用方式</label>
+                    <select id="llm-mode" onchange="handleLLMModeChange()" class="w-full px-3 py-2 border rounded-lg">
+                        <option value="local">本地模型（llama.cpp）</option>
+                        <option value="api">在线 API</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">接口地址</label>
+                    <input id="llm-api-url" type="url" class="w-full px-3 py-2 border rounded-lg" placeholder="https://api.openai.com/v1/chat/completions">
+                    <p class="text-xs text-gray-400 mt-1">填写完整的 OpenAI 兼容 chat/completions 地址</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">模型名称</label>
+                    <input id="llm-model" type="text" class="w-full px-3 py-2 border rounded-lg" placeholder="例如：gpt-4.1-mini、deepseek-chat、qwen-plus">
+                </div>
+                <div id="llm-api-key-row">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+                    <input id="llm-api-key" type="password" autocomplete="new-password" class="w-full px-3 py-2 border rounded-lg" placeholder="输入新的 API Key">
+                    <p id="llm-key-hint" class="text-xs text-gray-400 mt-1">密钥仅保存在这台电脑，不会上传到 GitHub</p>
+                </div>
+                <div id="llm-settings-result" class="hidden text-sm rounded-lg px-3 py-2"></div>
+            </div>
+            <div class="flex gap-2 mt-5">
+                <button onclick="testLLMSettings()" id="btn-test-llm" class="px-4 py-2 border rounded-lg hover:bg-gray-50">测试连接</button>
+                <button onclick="closeLLMSettings()" class="ml-auto px-4 py-2 border rounded-lg hover:bg-gray-50">取消</button>
+                <button onclick="saveLLMSettings()" id="btn-save-llm" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">保存并使用</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 主体区域 -->
-    <div class="flex-1 flex overflow-hidden">
+    <div class="workspace-layout flex-1 flex overflow-hidden">
         <!-- 左侧：患者与录音区 -->
-        <div class="w-[29%] bg-white border-r flex flex-col">
+        <div class="workspace-column left-column-scroll w-[29%] bg-white border-r flex flex-col">
             <!-- 患者信息卡 -->
             <div class="left-module left-patient-module">
                 <div class="left-module-heading">
@@ -573,7 +628,7 @@
                     <div class="left-subpanel-heading">
                         <span class="left-subpanel-index">A</span>
                         <div>
-                            <h3>实时录音</h3>
+                        <h3>录音</h3>
                             <p>先选择说话类型，再开始录音</p>
                         </div>
                     </div>
@@ -649,7 +704,7 @@
                     <div class="left-subpanel-heading">
                         <span class="left-subpanel-index">C</span>
                         <div class="flex-1">
-                            <h3>医生描述与病例资料</h3>
+                            <h3>文字与图片</h3>
                             <p>描述、文字与图片在这里统一整理</p>
                         </div>
                     </div>
@@ -674,24 +729,34 @@
                         accept="image/jpeg,image/png,image/webp,image/bmp,.jpg,.jpeg,.png,.webp,.bmp"
                         class="hidden" onchange="handleCaseImageSelect(event)">
 
-                    <div class="grid grid-cols-3 gap-2 mt-2">
-                        <button id="btn-paste-transcript" onclick="pasteCaseMaterialFromClipboard()"
-                            class="py-2 border border-purple-200 text-purple-700 rounded-lg text-xs font-medium hover:bg-purple-50 transition">
-                            粘贴资料
-                        </button>
-                        <button id="btn-select-case-images" onclick="document.getElementById('case-image-input').click()"
-                            class="py-2 border border-blue-200 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-50 transition">
-                            选择图片
-                        </button>
-                        <button id="btn-import-transcript" onclick="importPastedTranscript()"
-                            class="py-2 bg-purple-600 text-white rounded-lg text-xs font-medium hover:bg-purple-700 transition">
-                            智能归档
-                        </button>
+                    <div id="case-image-drop-zone"
+                        ondragenter="handleCaseImageDrag(event, true)"
+                        ondragover="handleCaseImageDrag(event, true)"
+                        ondragleave="handleCaseImageDrag(event, false)"
+                        ondrop="handleCaseImageDrop(event)"
+                        class="mt-2 rounded-xl border-2 border-dashed border-blue-200 bg-blue-50/40 p-2 transition">
+                        <p class="text-center text-[11px] font-medium text-blue-700 mb-2">
+                            可一次选择或拖入多张口内照、X线片
+                        </p>
+                        <div class="grid grid-cols-3 gap-2">
+                            <button id="btn-paste-transcript" onclick="pasteCaseMaterialFromClipboard()"
+                                class="py-2 border border-purple-200 bg-white text-purple-700 rounded-lg text-xs font-medium hover:bg-purple-50 transition">
+                                粘贴资料
+                            </button>
+                            <button id="btn-select-case-images" onclick="document.getElementById('case-image-input').click()"
+                                class="py-2 border border-blue-300 bg-white text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-50 transition">
+                                选择多张图片
+                            </button>
+                            <button id="btn-import-transcript" onclick="importPastedTranscript()"
+                                class="py-2 bg-purple-600 text-white rounded-lg text-xs font-medium hover:bg-purple-700 transition">
+                                智能归档
+                            </button>
+                        </div>
                     </div>
 
                     <div id="case-image-staging" class="hidden mt-2"></div>
                     <p class="text-[11px] text-gray-400 mt-1">
-                        输入框支持直接 Ctrl+V 粘贴截图；图片按显示顺序编号。
+                        支持 Ctrl+V 粘贴截图；多图按选择或拖入顺序编号并上传。
                     </p>
 
                     <input id="transcript-file-input" type="file"
@@ -721,7 +786,7 @@
                 </div>
                 <span class="left-module-step">03</span>
             </div>
-            <div class="flex-1 overflow-y-auto px-4 pb-4" id="conversation-list">
+            <div class="overflow-y-auto px-3 pb-2" id="conversation-list">
                 <p class="text-center text-gray-400 text-sm py-4">暂无对话记录</p>
             </div>
 
@@ -747,7 +812,7 @@
         </div>
 
         <!-- 中间：病历审核区 -->
-        <div class="w-[47%] bg-white border-r flex flex-col">
+        <div class="workspace-column w-[47%] bg-white border-r flex flex-col min-h-0">
             <div class="px-4 py-3 border-b bg-gray-50 flex justify-between items-center">
                 <div>
                     <h2 class="font-bold text-gray-800">门诊病历模板</h2>
@@ -779,7 +844,7 @@
         </div>
 
         <!-- 右侧：信息提取与本地病例问答 -->
-        <div class="w-[24%] bg-gray-50 flex flex-col min-h-0">
+        <div class="workspace-column w-[24%] bg-gray-50 flex flex-col min-h-0">
             <div class="px-4 py-3 border-b bg-white shrink-0">
                 <h2 class="font-bold text-gray-800">实时信息提取</h2>
                 <p class="text-xs text-gray-500">AI从录音和病历中提取的关键信息</p>
@@ -1042,6 +1107,104 @@
             '辅助检查', '诊断', '治疗计划', '处置', '医嘱'
         ];
         const STRUCTURED_SECTIONS = ['口腔专科检查', '辅助检查', '诊断', '治疗计划'];
+        let llmConfig = null;
+
+        async function openLLMSettings() {
+            const res = await fetch(`${API_BASE}/api/llm/config`, {cache: 'no-store'});
+            llmConfig = await res.json();
+            document.getElementById('llm-mode').value = llmConfig.mode || 'local';
+            document.getElementById('llm-api-url').value = llmConfig.api_url || '';
+            document.getElementById('llm-model').value = llmConfig.model || '';
+            document.getElementById('llm-api-key').value = '';
+            document.getElementById('llm-key-hint').textContent = llmConfig.has_api_key
+                ? '已保存密钥。留空将继续使用原密钥；密钥不会上传到 GitHub'
+                : '密钥仅保存在这台电脑，不会上传到 GitHub';
+            document.getElementById('llm-settings-result').classList.add('hidden');
+            updateLLMSettingsVisibility();
+            document.getElementById('llm-settings-modal').classList.remove('hidden');
+        }
+
+        function closeLLMSettings() {
+            document.getElementById('llm-settings-modal').classList.add('hidden');
+        }
+
+        function updateLLMSettingsVisibility() {
+            const isApi = document.getElementById('llm-mode').value === 'api';
+            document.getElementById('llm-api-key-row').classList.toggle('hidden', !isApi);
+        }
+
+        function handleLLMModeChange() {
+            const mode = document.getElementById('llm-mode').value;
+            const url = document.getElementById('llm-api-url');
+            const model = document.getElementById('llm-model');
+            if (mode === 'local') {
+                url.value = 'http://127.0.0.1:8080/v1/chat/completions';
+                model.value = 'dental-qwen';
+            } else if (url.value.includes('127.0.0.1') || url.value.includes('localhost')) {
+                url.value = '';
+                model.value = '';
+            }
+            updateLLMSettingsVisibility();
+        }
+
+        function collectLLMSettings() {
+            const key = document.getElementById('llm-api-key').value.trim();
+            return {
+                mode: document.getElementById('llm-mode').value,
+                api_url: document.getElementById('llm-api-url').value.trim(),
+                model: document.getElementById('llm-model').value.trim(),
+                api_key: key || (llmConfig?.has_api_key ? '__KEEP__' : '')
+            };
+        }
+
+        function showLLMSettingsResult(message, ok) {
+            const node = document.getElementById('llm-settings-result');
+            node.textContent = message;
+            node.className = `text-sm rounded-lg px-3 py-2 ${ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`;
+        }
+
+        async function testLLMSettings() {
+            const button = document.getElementById('btn-test-llm');
+            button.disabled = true;
+            button.textContent = '测试中...';
+            try {
+                const res = await fetch(`${API_BASE}/api/llm/test`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(collectLLMSettings())
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || '连接失败');
+                showLLMSettingsResult(`连接成功，当前模型：${data.model}`, true);
+            } catch (e) {
+                showLLMSettingsResult(e.message, false);
+            } finally {
+                button.disabled = false;
+                button.textContent = '测试连接';
+            }
+        }
+
+        async function saveLLMSettings() {
+            const button = document.getElementById('btn-save-llm');
+            button.disabled = true;
+            button.textContent = '保存中...';
+            try {
+                const res = await fetch(`${API_BASE}/api/llm/config`, {
+                    method: 'PUT', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(collectLLMSettings())
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || '保存失败');
+                llmConfig = data.config;
+                closeLLMSettings();
+                await checkLLM();
+                log(`已切换至${data.config.mode === 'api' ? '在线API' : '本地模型'}：${data.config.model}`);
+            } catch (e) {
+                showLLMSettingsResult(e.message, false);
+            } finally {
+                button.disabled = false;
+                button.textContent = '保存并使用';
+            }
+        }
 
         // ==================== 患者管理 ====================
         function showPatientModal() {
@@ -2148,11 +2311,15 @@
                 return [{ur: '', ul: '', lr: '', ll: '', content: ''}];
             }
 
-            const rowPattern = /牙位（右上：(.*?)；左上：(.*?)；右下：(.*?)；左下：(.*?)）：\s*([\s\S]*?)(?=\n牙位（右上：|$)/g;
+            // 兼容模型偶尔输出的半角括号、冒号、分号和不规则空格。
+            const normalizedText = text
+                .replace(/\(/g, '（').replace(/\)/g, '）')
+                .replace(/:/g, '：').replace(/;/g, '；');
+            const rowPattern = /牙位\s*（\s*右上\s*：\s*(.*?)\s*；\s*左上\s*：\s*(.*?)\s*；\s*右下\s*：\s*(.*?)\s*；\s*左下\s*：\s*(.*?)\s*）\s*：\s*([\s\S]*?)(?=\n\s*牙位\s*（|$)/g;
             const rows = [];
             let match;
 
-            while ((match = rowPattern.exec(text)) !== null) {
+            while ((match = rowPattern.exec(normalizedText)) !== null) {
                 rows.push({
                     ur: match[1].trim(),
                     ul: match[2].trim(),
@@ -2163,7 +2330,36 @@
             }
 
             if (rows.length > 0) return rows;
-            return [{ur: '', ul: '', lr: '', ll: '', content: text}];
+
+            // 旧数据或异常模型输出没有结构头时，也根据明确FDI牙位回填象限。
+            const fallback = {ur: [], ul: [], lr: [], ll: []};
+            const seen = new Set();
+            for (const match of text.matchAll(/(^|[^0-9])([1-4][1-8]|[5-8][1-5])\s*牙?/g)) {
+                const tooth = match[2];
+                if (seen.has(tooth)) continue;
+                seen.add(tooth);
+                const quadrant = ({
+                    '1': 'ur', '2': 'ul', '3': 'll', '4': 'lr',
+                    '5': 'ur', '6': 'ul', '7': 'll', '8': 'lr'
+                })[tooth[0]];
+                if (quadrant && !fallback[quadrant].includes(tooth[1])) {
+                    fallback[quadrant].push(tooth[1]);
+                }
+            }
+            const spokenMap = {'右上': 'ur', '左上': 'ul', '右下': 'lr', '左下': 'll'};
+            const digitMap = {'一':'1','二':'2','三':'3','四':'4','五':'5','六':'6','七':'7','八':'8'};
+            for (const match of text.matchAll(/(右上|左上|右下|左下)\s*(?:第)?\s*([一二三四五六七八1-8](?:\s*[、,，和及]\s*[一二三四五六七八1-8])*)\s*(?:牙|颗)?/g)) {
+                const quadrant = spokenMap[match[1]];
+                for (const digit of match[2].match(/[一二三四五六七八1-8]/g) || []) {
+                    const value = digitMap[digit] || digit;
+                    if (!fallback[quadrant].includes(value)) fallback[quadrant].push(value);
+                }
+            }
+            return [{
+                ur: fallback.ur.join('、'), ul: fallback.ul.join('、'),
+                lr: fallback.lr.join('、'), ll: fallback.ll.join('、'),
+                content: text.replace(/牙位(?:需|待)确认[，。；;：:\s]*/g, '').trim()
+            }];
         }
 
         function toothRowHtml(section, row = {}) {
@@ -2640,8 +2836,8 @@
                 appendCaseChatMessage('assistant', cleanAnswer);
                 caseChatHistory.push({role: 'assistant', content: cleanAnswer});
                 caseChatHistory = caseChatHistory.slice(-10);
-                status.textContent = `回答来自本机模型 ${data.local_model || ''}，请医生审核`;
-                log('完成一次本地病例问答');
+                status.textContent = `回答来自${data.llm_mode === 'api' ? '在线API' : '本地模型'} ${data.local_model || ''}，请医生审核`;
+                log('完成一次病例问答');
             } catch (e) {
                 loadingNode?.remove();
                 appendCaseChatMessage(
@@ -2649,7 +2845,7 @@
                     '问答失败：' + e.message + '\n请确认右上角显示“LLM就绪”。'
                 );
                 status.textContent = '问答失败';
-                log('本地病例问答失败：' + e.message);
+                log('病例问答失败：' + e.message);
             } finally {
                 setCaseChatState(false);
                 input.focus();
@@ -2675,12 +2871,14 @@
                 const data = await res.json();
                 const connected = res.ok
                     && data.llm
-                    && data.llm.status === 'ok'
+                    && ['ok', 'configured'].includes(data.llm.status)
                     && data.llm.model_name_matches !== false;
 
                 if (connected) {
-                    status.innerHTML = '<span class="w-2 h-2 bg-green-500 rounded-full"></span> LLM就绪';
+                    const source = data.llm.mode === 'api' ? '在线API' : '本地模型';
+                    status.innerHTML = `<span class="w-2 h-2 bg-green-500 rounded-full"></span> ${source}就绪`;
                     status.className = 'px-3 py-1 rounded-full text-xs bg-green-100 text-green-700 flex items-center gap-1';
+                    document.getElementById('llm-mode-description').textContent = `${source} · ${data.llm.model || ''}`;
                 } else {
                     status.innerHTML = '<span class="w-2 h-2 bg-red-500 rounded-full"></span> LLM未连接';
                     status.className = 'px-3 py-1 rounded-full text-xs bg-red-100 text-red-700 flex items-center gap-1';
@@ -2703,7 +2901,7 @@
         checkLLM();
     </script>
     <script src="/static/multi_patient_v2.js?v=2.3"></script>
-    <script src="/static/multimodal_v2_1.js?v=2.3"></script>
+    <script src="/static/multimodal_v2_1.js?v=2.4"></script>
     <script src="/static/clinical_ui_v2_2.js?v=2.3"></script>
 </body>
 </html>
